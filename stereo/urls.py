@@ -15,8 +15,11 @@ import rectifi.views
 #
 # Learn more here: https://docs.djangoproject.com/en/2.1/topics/http/urls/
 
+def index(request):
+    return redirect('/rectifi', permanent=True)
+
 urlpatterns = [
-    path("", RedirectView.as_view(pattern_name='rectifi/', permanent=False)),
+    path("", index),
     path("admin/", admin.site.urls),
     path("rectifi/", include("rectifi.urls"))
 ]
