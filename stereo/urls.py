@@ -1,5 +1,6 @@
 from django.urls import path, include
-
+from django.shortcuts import redirect
+from django.views.generic import RedirectView
 from django.contrib import admin
 
 admin.autodiscover()
@@ -15,7 +16,7 @@ import rectifi.views
 # Learn more here: https://docs.djangoproject.com/en/2.1/topics/http/urls/
 
 urlpatterns = [
-    path("", rectifi.views.index, name="index"),
-    path("db/", rectifi.views.db, name="db"),
+    path("", RedirectView.as_view(pattern_name='rectifi/', permanent=False)),
     path("admin/", admin.site.urls),
+    path("rectifi/", include("rectifi.urls"))
 ]
