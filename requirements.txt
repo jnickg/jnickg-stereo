@@ -1,3 +1,5 @@
 django
+django_heroku
 gunicorn
-django-heroku
+opencv-python
+requests
