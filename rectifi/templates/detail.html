@@ -12,7 +12,10 @@
 </ul>
 <h2>Images</h2>
 {% if images|length > 0 %}
-TODO Display images!!!
+
+{% for imgreq in images %}
+<img src="{{ imgreq.img.data.url }}" alt="{{imgreq.name}}" /><br />
+{% endfor %}
 {% else %}
 <i>No images to display.</i>
 {% endif %}

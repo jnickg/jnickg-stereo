@@ -4,21 +4,17 @@
 {% block content %}
 
 <h1>Rectifi!</h1>
+
 <h2>Rectify Images</h2>
-
-
-<form action="{% url 'rectifi:rectify' %}" method="post">
+<form action="{% url 'rectifi:rectify' %}" method="post" enctype="multipart/form-data">
   {% csrf_token %}
-  Describe your scene:<br/><input type="text"/><br/>
-  First Image: <input type="file"/><br/>
-  Second Image: <input type="file"/><br/>
+  Describe your scene:<br/><input type="text" name="brief"/><br/>
+  Images: <input type="file" multiple accept='image/*' name="images"/><br/>
   <input type="submit" value="Rectify!"/>
 </form>
 
-
-
-
 <hr />
+
 <h2>Previous Requests</h2>
 {% if latest_requests %}
   <ul>
@@ -33,6 +29,5 @@
 {% else %}
   <p>No polls are available.</p>
 {% endif %}
-
 
 {% endblock %}
