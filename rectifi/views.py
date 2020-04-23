@@ -5,6 +5,7 @@ from django.template import loader
 import requests
 
 from .models import Image, RectifyRequest, RectifyRequestImage
+from .tasks import go_and_rectify
 
 # Create your views here.
 def index(request):
@@ -60,6 +61,8 @@ def rectify(request):
         rect_img = RectifyRequestImage(request=req,
                                        img=image)
         rect_img.save()
+
+    go_and_rectify(req.id)
 
     return HttpResponseRedirect(reverse('rectifi:detail', args=(req.id,)))
 

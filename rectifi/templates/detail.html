@@ -8,6 +8,7 @@
 <h2>Overview</h2>
 <ul>
   <li>ID: {{ request.id }}</li>
+  <li>Status: {{request.status }}</li>
   <li>Brief: <i>{{ request.brief }}</i></li>
   <li>Requested at <u>{{ request.request_time }}</u></li>
   <li>{{images|length}} Images in this request</li>
@@ -21,6 +22,5 @@
 {% else %}
 <i>No images to display.</i>
 {% endif %}
-
 
 {% endblock %}
