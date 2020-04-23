@@ -3,7 +3,7 @@
 
 {% block content %}
 
-<h1>Rectifi!</h1>
+<h1>{% block title %}Home{% endblock %}</h1>
 
 <h2>Rectify Images</h2>
 <form action="{% url 'rectifi:rectify' %}" method="post" enctype="multipart/form-data">
