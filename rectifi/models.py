@@ -1,10 +1,10 @@
 from django.db import models
 
 class Image(models.Model):
-    name = models.CharField(unique=True, max_length=127)
-    data = models.BinaryField(blank=True)
+    name = models.CharField(max_length=127)
+    data = models.ImageField(blank=False, editable=True)
     def __str__(self):
-        return self.name
+        return "Image {0} - {1}".format(self.id, self.name)
 
 class RectifyRequest(models.Model):
     brief = models.CharField(max_length=255)

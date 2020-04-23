@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "storages",
     "rectifi",
 ]
 
@@ -87,6 +88,25 @@ DATABASES = {
     }
 }
 
+# File Storage
+#
+
+DEFAULT_FILE_STORAGE = 'stereo.storage_backends.MediaStorage'
+AWS_ACCESS_KEY_ID = os.environ["AWS_S3_ACCESS_KEY_ID"]
+AWS_SECRET_ACCESS_KEY = os.environ["AWS_S3_ACCESS_KEY"]
+AWS_STORAGE_BUCKET_NAME = os.environ["AWS_S3_STORAGE_BUCKET_NAME"]
+AWS_S3_REGION_NAME = os.environ["AWS_S3_REGION_NAME"]
+AWS_S3_CUSTOM_DOMAIN = '%s.s3.amazonaws.com' % AWS_STORAGE_BUCKET_NAME
+AWS_S3_OBJECT_PARAMETERS = {
+    'CacheControl': 'max-age=86400',
+}
+AWS_LOCATION = 'static'
+# AWS_DEFAULT_ACL = None # Per S3Boto3Storage warning: default behavior is insecure and will change in django-storages 1.10
+STATICFILES_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+STATIC_URL = "https://%s/%s/" % (AWS_S3_CUSTOM_DOMAIN, AWS_LOCATION)
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, 'rectifi/static'),
+]
 
 # Password validation
 # https://docs.djangoproject.com/en/2.0/ref/settings/#auth-password-validators

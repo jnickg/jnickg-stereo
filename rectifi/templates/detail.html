@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+
+<h1>Rectifi!</h1>
+<h2>Rectify Details: Request {{ request.id }}</h2>
+<ul>
+  <li>Brief: <i>{{ request.brief }}</i></li>
+  <li>Requested at <u>{{ request.request_time }}</u></li>
+  <li>{{images|length}} Images in this request</li>
+</ul>
+<h2>Images</h2>
+{% if images|length > 0 %}
+
+{% for imgreq in images %}
+<img src="{{ imgreq.img.data.url }}" alt="{{imgreq.name}}" /><br />
+{% endfor %}
+{% else %}
+<i>No images to display.</i>
+{% endif %}
+
+
+{% endblock %}

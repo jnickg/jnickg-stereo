@@ -1,6 +1,9 @@
+boto3
 django
 django_heroku
+django-storages
 gunicorn
 opencv-python
+Pillow
 python-dotenv
 requests
