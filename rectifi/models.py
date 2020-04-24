@@ -34,3 +34,8 @@ class RectifyRequestImage(models.Model):
 
     def __str__(self):
             return "Image {0} from Rectify Request {1}".format(self.img.name, self.request.id)
+
+class RectifyRequestResult(models.Model):
+    request = models.ForeignKey(RectifyRequest, on_delete=models.CASCADE)
+    img = models.ForeignKey(Image, on_delete=models.CASCADE)
+    notes = models.CharField(max_length=512)

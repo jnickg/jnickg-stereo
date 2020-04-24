@@ -2,9 +2,10 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.http import HttpResponse, HttpResponseRedirect
 from django.urls import reverse
 from django.template import loader
+from django.db import transaction
 import requests
 
-from .models import Image, RectifyRequest, RectifyRequestImage
+from .models import Image, RectifyRequest, RectifyRequestImage, RectifyRequestResult
 from .tasks import go_and_rectify
 
 # Create your views here.
@@ -17,9 +18,6 @@ def index(request):
     return render(request, 'index.html', context)
 
 def db(request):
-    req = RectifyRequest()
-    req.brief = "A Rectify request about nothing."
-    req.save()
     requests = RectifyRequest.objects.all()
     return render(request, "db.html", {"rectifyRequests": requests})
 
@@ -27,13 +25,20 @@ def detail(request, request_id):
     this_req = get_object_or_404(RectifyRequest, pk=request_id)
     images = []
     try:
-        images =  RectifyRequestImage.objects.all().filter(request=this_req)
+        images = RectifyRequestImage.objects.all().filter(request=this_req)
     except:
         print("Did not find associated images")
+
+    results = []
+    try:
+        results = RectifyRequestResult.objects.all().filter(request=this_req)
+    except:
+        print("Did not find associated results")
     
     context = {
         'request': this_req,
-        'images': images
+        'images': images,
+        'results': results,
     }
     return render(request, 'detail.html', context)
 
@@ -44,23 +49,26 @@ def rectify(request):
 
     req = RectifyRequest()
     req.brief = request.POST.get('brief', '(None given)')
-    req.save()
-
     print("Created rectifi request {0}".format(req.id))
 
-    print("There are {0} files uploaded".format(len(request.FILES.getlist('images'))))
+    print("Including {0} files uploaded".format(len(request.FILES.getlist('images'))))
+    images = []
+    rect_images = []
     for posted_image in request.FILES.getlist('images'):
-
         print("Saving image {0}".format(posted_image.name))
         print("Image is size {0} and type {1}".format(posted_image.size, posted_image.content_type))
-        image = Image.objects.create(data=posted_image,
-                                     name=posted_image.name)
-        # image = Image(name=posted_image.name,
-        #             data=posted_image.read())
-        image.save()
+        image = Image(data=posted_image,
+                      name=posted_image.name)
         rect_img = RectifyRequestImage(request=req,
                                        img=image)
-        rect_img.save()
+
+        images.append(image)
+        rect_images.append(rect_img)
+
+    with transaction.atomic():
+        req.save()
+        for i in images: i.save()
+        for r in rect_images: r.save()
 
     go_and_rectify(req.id)
 
