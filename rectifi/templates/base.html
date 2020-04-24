@@ -1,7 +1,11 @@
 <!DOCTYPE html>
 <html>
+{% load static %}
 <head>
-<title>{% block title %}{% endblock %} | Rectifi! A stereoscopic image rectifier.</title>
+  <title>{% block title %}{% endblock %} | Rectifi! A stereoscopic image rectifier.</title>
+  <link href="https://fonts.googleapis.com/css2?family=Raleway&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static "normalize.css" %}">
+  <link rel="stylesheet" href="{% static "skeleton.css" %}">
   <style type="text/css">
     .request-image {
       max-width: 50%;
@@ -22,11 +26,14 @@
       align-content: center;
       margin: 1em 3em;
     }
+    img {
+      border: 1px black solid;
+    }
   </style>
 </head>
 <body>
-
-{% block content %}{% endblock %}
-
+  <div class="container">
+    {% block content %}{% endblock %}
+  </div>
 </body>
 </html>

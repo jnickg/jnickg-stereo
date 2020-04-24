@@ -8,9 +8,17 @@
 <h2>Rectify Images</h2>
 <form action="{% url 'rectifi:rectify' %}" method="post" enctype="multipart/form-data">
   {% csrf_token %}
-  Describe your scene:<br/><input type="text" name="brief"/><br/>
-  Images: <input type="file" multiple accept='image/*' name="images"/><br/>
-  <input type="submit" value="Rectify!"/>
+  <div class="row">
+    <div class="seven columns">
+      <label for="briefInput">Describe your scene</label>
+      <input class="u-full-width" type="text" name="brief" id="briefInput" placeholder="Images of [scene] from my smartphone."/>
+    </div>
+    <div class="five columns">
+      <label for="imagesInput">Images</label>
+      <input class="u-full-width" type="file" multiple accept='image/*' name="images" id="imagesInput"/><br/>
+    </div>
+  </div>
+<input class="button-primary" type="submit" value="Rectify!"/>
 </form>
 
 <hr />
