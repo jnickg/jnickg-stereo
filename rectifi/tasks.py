@@ -31,21 +31,20 @@ def go_and_rectify(request_id):
   dest_fmt = ".bmp"
   dest = "request_{0}_average{1}".format(request_id, dest_fmt)
 
-  #try:
-  image_files = [np.fromfile(default_storage.open(i.img.name), dtype=np.uint8) for i in images]
-  avg_output = average_pels(image_files, fmt=dest_fmt)
-  avg_output_f = ContentFile(avg_output, name=dest)
-  #default_storage.save(dest, avg_output_f)
+  try:
+    image_files = [np.fromfile(default_storage.open(i.img.name), dtype=np.uint8) for i in images]
+    avg_output = average_pels(image_files, fmt=dest_fmt)
+    avg_output_f = ContentFile(avg_output, name=dest)
 
-  rslt_image = Image(name=avg_output_f.name, data=avg_output_f)
-  result = RectifyRequestResult(request=req, img=rslt_image, notes="The average of interpolated pixels")
-  req.status = RectifyRequest.RequestStatus.COMPLETE
+    rslt_image = Image(name=avg_output_f.name, data=avg_output_f)
+    result = RectifyRequestResult(request=req, img=rslt_image, notes="The average of interpolated pixels")
+    req.status = RectifyRequest.RequestStatus.COMPLETE
 
-  with transaction.atomic():
-    rslt_image.save()
-    result.save()
-    req.save()
-  #except ValueError as e:
-  #  req.status = RectifyRequest.RequestStatus.ABORTED
-  #  req.save()
-  #  raise e
+    with transaction.atomic():
+      rslt_image.save()
+      result.save()
+      req.save()
+  except ValueError as e:
+   req.status = RectifyRequest.RequestStatus.ABORTED
+   req.save()
+   raise e
