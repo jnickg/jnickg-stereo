@@ -8,9 +8,13 @@
   <link rel="stylesheet" href="{% static "normalize.css" %}">
   <link rel="stylesheet" href="{% static "skeleton.css" %}">
   <style type="text/css">
-    .subtitle {
+    .page-title {
       font-style: italic;
       color: gray;
+      text-align: center;
+    }
+    .page-header {
+      text-align: center;
     }
     img {
       border: 1px black solid;
@@ -18,11 +22,57 @@
     .row {
       margin-top: 3rem;
     }
+    ul.nav {
+      list-style-type: none;
+      margin: 1rem auto;
+      max-height: fit-content;
+    }
+    ul.nav li {
+      display: inline;
+    }
+    .nav-row {
+      text-align: center;
+      margin: 0 auto;
+      padding: 0;
+    }
+    .nav-row hr {
+      margin: 1px auto;
+      width: 45%;
+      border: 0;
+      height: 1px;
+      background-image: linear-gradient(to right, rgba(64, 64, 64, 0), rgba(64, 64, 64, 0.5), rgba(64, 64, 64, 0));
+    }
+    .nav-row a.button {
+      margin: 0
+    }
+    .nav-row button {
+      margin: 0;
+    }
+    .nav-row button.button-primary {
+      margin: 0;
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    {% block content %}{% endblock %}
+    <div class="row">
+      <h4 class="page-title">Rectifi! A stereoscopic image rectifier.</h2>
+    </div>
+    <div class="nav-row">
+      <hr />
+      <ul class="nav">
+        <li>{% block nav-index %}<a class="button" href="{% url 'rectifi:index' %}">Home</a>{% endblock %}</li>
+        <li>{% block nav-requests %}<a class="button" href="{% url 'rectifi:requests' %}">Requests</a>{% endblock %}</li>
+        <li>{% block nav-about %}<a class="button" href="{% url 'rectifi:about' %}">About</a>{% endblock %}</li>
+      </ul>
+      <hr />
+    </div>
+    <div class="row">
+      <h1 class="page-header">{% block header %}{% endblock %}</h1>
+    </div>
+    <div class="row">
+      {% block content %}{% endblock %}
+    </div>
   </div>
 </body>
 </html>

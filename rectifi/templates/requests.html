@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Requests{% endblock %}
+
+{% block nav-requests %}
+<button class="button-primary"><strong>{% block header %}Requests{% endblock %}</strong></button>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+<h2>Latest</h2>
+{% if latest_requests %}
+  <ul>
+  {% for request in latest_requests %}
+    {% if request.brief|length > 0 %}
+      <li><a href="{%  url 'rectifi:detail' request.id %}">{{ request.brief }}</a></li>
+    {% else %}
+      <li><a href="{%  url 'rectifi:detail' request.id %}">Rectify Request at {{ request.request_time }}</a></li>
+    {% endif %}
+  {% endfor %}
+  </ul>
+{% else %}
+  <p>No polls are available.</p>
+{% endif %}
+</div>
+
+{% endblock %}

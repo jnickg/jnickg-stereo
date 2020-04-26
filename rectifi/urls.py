@@ -6,8 +6,10 @@ app_name = 'rectifi'
 
 urlpatterns = [
     path('', views.index, name='index'),
+    path('about/', views.about, name='about'),
     path('db/', views.db, name='db'),
-    path('<int:request_id>/', views.detail, name='detail'),
+    path('requests/<int:request_id>/detail', views.detail, name='detail'),
     path('rectify/', views.rectify, name='rectify'),
-    path('<int:request_id>/results/', views.results, name='results')
+    path('requests/', views.requests, name='requests'),
+    path('requests/<int:request_id>/results/', views.results, name='results')
 ]

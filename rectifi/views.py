@@ -10,12 +10,18 @@ from .tasks import go_and_rectify
 
 # Create your views here.
 def index(request):
+    return render(request, 'index.html')
+
+def about(request):
+    return render(request, 'about.html')
+
+def requests(request):
     print("trying to grab requests...")
     latest_requests = RectifyRequest.objects.order_by('-request_time')[:5]
     context = {
         'latest_requests': latest_requests
     }
-    return render(request, 'index.html', context)
+    return render(request, 'requests.html', context)
 
 def db(request):
     requests = RectifyRequest.objects.all()
@@ -45,7 +51,7 @@ def detail(request, request_id):
 def rectify(request):
     if (request.method != 'POST'):
         print("Redirect")
-        return redirect('/rectifi', permanent=True)
+        return redirect('index', permanent=True)
 
     req = RectifyRequest()
     req.brief = request.POST.get('brief', '(None given)')

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}About{% endblock %}
+
+{% block nav-about %}
+<button class="button-primary"><strong>{% block header %}About{% endblock %}</strong></button>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+  <h2>What is Rectifi?</h2>
+  <p>Rectifi is a simple tool to let you upload images taken with your smartphone, and get some cool data back.</p>
+  <p><strong>Note:</strong> Currently, <em>Rectifi</em> doesn't do a whole lot. The plumbing is in place, but the algorithm is some random OpenCV code that isn't very exciting. Eventually, it will let you get 3D point clouds from a few imags taken with your mobile device.</p>
+  <p>When that's supported, all you have to do is:</p>
+  <ol>
+    <li>Pick a subject that you want to make a point cloud for.</li>
+    <li>Print out <a href="#TBD">this</a> calibration image on a piece of paper, tape it to a flat surface.</li>
+    <li>Take a few imags from different angles, ensuring the calibration image is clearly visible in each of them.</li>
+    <li>Upload them using the form, and hit the <button class="button-primary">Rectify!</button> button.</button></li>
+    <li>Wait a couple minutes for the algorithm to run.</li>
+  </ol>
+  <p>...And then bam! Your results page will be populated with all the output data, for your enjoyment.</p>
+</div>
+{% endblock %}
