@@ -32,7 +32,7 @@ def go_and_rectify(request_id):
   dest = "request_{0}_average{1}".format(request_id, dest_fmt)
 
   try:
-    image_files = [np.fromfile(default_storage.open(i.img.name), dtype=np.uint8) for i in images]
+    image_files = [np.fromfile(default_storage.open(i.img.data.name), dtype=np.uint8) for i in images]
     avg_output = average_pels(image_files, fmt=dest_fmt)
     avg_output_f = ContentFile(avg_output, name=dest)
 
