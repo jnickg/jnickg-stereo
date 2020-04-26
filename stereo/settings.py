@@ -29,6 +29,9 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
+# Test runner with no database creation
+TEST_RUNNER = 'stereo.test_runner.NoDbTestRunner'
+
 
 # Application definition
 
