@@ -3,22 +3,52 @@
 
 {% block content %}
 
-<h1>Rectifi!</h1>
-<h2>Rectify Details: Request {{ request.id }}</h2>
+<h1>{% block title %}Request {{ request.id }} details{% endblock %}</h1>
+<a class="button" href="{%  url 'rectifi:index' %}">⮢ <i>Return home</i></a>
+<h2>Overview</h2>
 <ul>
+  <li>ID: <strong>{{ request.id }}</strong></li>
+  <li>Status: <code>{{request.status }}</code></li>
   <li>Brief: <i>{{ request.brief }}</i></li>
   <li>Requested at <u>{{ request.request_time }}</u></li>
-  <li>{{images|length}} Images in this request</li>
+  <li>{{images|length}} Image(s) in this request</li>
+  <li>{{results|length}} Result(s) associated with this request</li>
 </ul>
-<h2>Images</h2>
+<h2>Input Images</h2>
 {% if images|length > 0 %}
-
+<div class="row">
 {% for imgreq in images %}
-<img src="{{ imgreq.img.data.url }}" alt="{{imgreq.name}}" /><br />
+{% if forloop.counter0|divisibleby:2 %}
+</div>
+<div class="row">
+{% endif %}
+<div class="six columns">
+  <label for="input_{{forloop.counter}}"><em>{{ imgreq.img.name }}</em></label>
+  <img class="u-full-width" id="input_{{forloop.counter}}" src="{{ imgreq.img.data.url }}" alt="{{imgreq.request.brief}}" />
+</div>
 {% endfor %}
+</div>
 {% else %}
 <i>No images to display.</i>
 {% endif %}
 
+<h2>Output Data</h2>
+{% if results|length > 0 %}
+<div class="row">
+{% for r in results %}
+{% if forloop.counter0|divisibleby:2 %}
+</div>
+<div class="row">
+{% endif %}
+  <div class="six columns">
+    <label for="result_{{forloop.counter}}"><em>{{ r.notes }}</em></label>
+    <img class="u-full-width" id="result_{{forloop.counter}}" src="{{ r.img.data.url }}" alt="{{r.img.name}}" />
+  </div>
+{% endfor %}
+</div>
+
+{% else %}
+<i>No results to display. Is status SUB, PRC, or BAD?</i>
+{% endif %}
 
 {% endblock %}

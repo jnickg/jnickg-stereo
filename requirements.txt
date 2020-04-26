@@ -2,7 +2,9 @@ boto3
 django
 django_heroku
 django-storages
+django-workers
 gunicorn
+numpy
 opencv-python
 Pillow
 python-dotenv

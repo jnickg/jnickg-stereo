@@ -3,18 +3,45 @@
 
 {% block content %}
 
-<h1>Rectifi!</h1>
+<div class="row">
+  <h1 class="u-pull-left">{% block title %}Home{% endblock %}</h1>
+  <h4 class="subtitle u-pull-right">Rectifi! A stereoscopic image rectifier.</h2>
+</div>
 
+<div class="row">
+  <h2>What is Rectifi?</h2>
+  <p>Rectifi is a simple tool to let you upload images taken with your smartphone, and get some cool data back.</p>
+  <p><strong>Note:</strong> Currently, <em>Rectifi</em> doesn't do a whole lot. The plumbing is in place, but the algorithm is some random OpenCV code that isn't very exciting. Eventually, it will let you get 3D point clouds from a few imags taken with your mobile device.</p>
+  <p>When that's supported, all you have to do is:</p>
+  <ol>
+    <li>Pick a subject that you want to make a point cloud for</li>
+    <li>Print out <a href="#TBD">this</a> calibration image on a piece of paper, tape it to a flat surface</li>
+    <li>Take a few imags from different angles, ensuring the calibration image is clearly visible in each of them</li>
+    <li>Upload them using the form, and hit the <button>Rectify!</button> button below</button></li>
+    <li>Wait a couple minutes for the algorithm to run.</li>
+  </ol>
+  <p>...And then bam! Your results page will be populated with all the output data, for your enjoyment.</p>
+</div>
+
+<div class="row">
 <h2>Rectify Images</h2>
 <form action="{% url 'rectifi:rectify' %}" method="post" enctype="multipart/form-data">
   {% csrf_token %}
-  Describe your scene:<br/><input type="text" name="brief"/><br/>
-  Images: <input type="file" multiple accept='image/*' name="images"/><br/>
-  <input type="submit" value="Rectify!"/>
+  <div class="row">
+    <div class="seven columns">
+      <label for="briefInput">Describe your scene</label>
+      <input class="u-full-width" type="text" name="brief" id="briefInput" placeholder="Images of [scene] from my smartphone."/>
+    </div>
+    <div class="five columns">
+      <label for="imagesInput">Images</label>
+      <input class="u-full-width" type="file" multiple accept='image/*' name="images" id="imagesInput"/><br/>
+    </div>
+  </div>
+<input class="button-primary" type="submit" value="Rectify!"/>
 </form>
+</div>
 
-<hr />
-
+<div class="row">
 <h2>Previous Requests</h2>
 {% if latest_requests %}
   <ul>
@@ -29,5 +56,6 @@
 {% else %}
   <p>No polls are available.</p>
 {% endif %}
+</div>
 
 {% endblock %}
