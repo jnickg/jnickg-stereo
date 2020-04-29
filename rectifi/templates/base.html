@@ -51,12 +51,21 @@
     .nav-row button.button-primary {
       margin: 0;
     }
+    .include-logo::before {
+      display: inline-block;
+      width: 2.4rem;
+      height: 2.4rem;
+      margin-right: 5px;
+      content: "";
+      background: url("{% static 'logo_rectifi.png' %}") no-repeat 0 0;
+      background-size: 100%;
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="row">
-      <h4 class="page-title">Rectifi! A stereoscopic image rectifier.</h2>
+      <h4 class="page-title include-logo">Rectifi! A stereoscopic image rectifier.</h2>
     </div>
     <div class="nav-row">
       <hr />
