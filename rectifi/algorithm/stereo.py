@@ -1,7 +1,20 @@
 import cv2 as cv
 import numpy as np
 
-def rectify(image_buffers):
+dflt_params = {
+  "fmt":".bmp",
+  "verbose": True,
+  "chess_sz":(6,9),
+  "chess_col":6,
+  "chess_row":9,
+  "chess_total":54,
+  "criteria": (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+}
+
+def get_param(key, params):
+  return params.get(key, dflt_params.get(key, None))
+
+def rectify(image_buffers, params=dflt_params):
   """Rectifies the given images
 
   Parameters:
@@ -14,17 +27,17 @@ def rectify(image_buffers):
   output = {}
 
   #
-  # Read all images in
+  print("+++Reading input images, decoding to CV format")
   #
   cvimgs = []
   for imgbuf in image_buffers:
-    cvimg = cv.imdecode(imgbuf, cv.IMREAD_COLOR)
+    cvimg = cv.imdecode(imgbuf, cv.IMREAD_GRAYSCALE)
     if cvimg is None:
       raise ValueError("Failed to decode provided image")
     cvimgs.append(cvimg)
 
   #
-  # Validate they are the same size (TODO normalize image spaces?)
+  print("+++Validating image sizes...") # (TODO normalize image spaces?)
   #
   it = iter(cvimgs)
   first_img = next(it)
@@ -38,17 +51,35 @@ def rectify(image_buffers):
   # the photo. If any of the photos don't have a matrix, dump it and see if we
   # can continue without them
   # See 717
+  print("+++Finding chessboard corners...")
   #
-
-  #cv.findChessboardCorners
+  chessboard_size = get_param("chess_sz", params)
+  found = [cv.findChessboardCorners(i, chessboard_size) for i in cvimgs]
+  if not all (f[0] is True for f in found):
+    raise ValueError("Unable to find calibration points for all images.")
+  if get_param("verbose", params):
+    for f in found:
+      print("Found points: {0}".format(f[1]))
+  # TODO something with this???
   #cv.drawChessboardCorners
 
   #
   # Calibrate images using the chessboard, to remove distortions.
   # See 718
-  #
+  print("+++Calibrating images...")
+  for i, pt in zip(cvimgs, [f[1] for f in found]):
+    objP = np.zeros((get_param("chess_total",params), 3), np.float32)
+    objP[:,:2] = np.mgrid[0:get_param("chess_row", params), 0:get_param("chess_col", params)].T.reshape(-1, 2)
 
-  #cv.calibrateCamera
+    objpoints = []
+    imgpoints = []
+    objpoints.append(objP)
+    cv.cornerSubPix(i, pt, (11, 11), (-1, -1), get_param("criteria", params))
+    imgpoints.append(pt)
+
+    ret, mtx, dist, rvecs, tvecs = cv.calibrateCamera(objpoints, imgpoints, i.shape[::-1], None, None)
+    if get_param("verbose", params):
+      print("Successfully calibrated! ret:{0} mtx:{1} dist:{2} rvecs:{3} tvecs:{4}".format(ret, mtx, dist, rvecs, tvecs))
 
   #
   # Compute Fundamental matrix between images. This matrix relates the two
@@ -106,4 +137,5 @@ def rectify(image_buffers):
   #
   #cv.stereoRectifyUncalibrated
 
+  raise ValueError("HIT END OF TEST IMPLEMENTATION")
   return output

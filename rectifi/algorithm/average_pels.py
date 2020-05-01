@@ -1,7 +1,11 @@
 import cv2 as cv
 import numpy as np
 
-def average_pels(image_buffers, fmt='.bmp'):
+dflt_params = {
+  "fmt":".bmp"
+}
+
+def average_pels(image_buffers, params=dflt_params):
   """Read the given image files, and average the co-local pixel values for all of them.
 
   If no dest_file is specified, a bitmap-encoded image is returned. If a dest_file is specified,
@@ -39,6 +43,6 @@ def average_pels(image_buffers, fmt='.bmp'):
     cvi = cvi / num_images
     #np.divide(cvi, num_images, out=cvi)
     np.add(totals, cvi, out=totals)
-  _, output = cv.imencode(fmt, totals)
+  _, output["file"] = cv.imencode(params['fmt'], totals)
 
   return output

@@ -2,7 +2,8 @@ import os
 from os import listdir
 from os.path import isfile, join
 import unittest
-from ..algorithm import fun
+from ..algorithm import average_pels
+from ..algorithm import stereo
 import numpy as np
 import hashlib as hl
 import cv2 as cv
@@ -18,10 +19,15 @@ def run_test_on(func, image_files, output_file):
     with open(f) as fh:
       image_buffers.append(np.fromfile(fh, dtype=np.uint8))
 
-  avg_output = func(image_buffers, fmt=test_fmt)
-  output_fh = open(output_file, 'wb+')
-  output_fh.write(avg_output)
-  output_fh.close()
+  p = {
+    "fmt": test_fmt
+  }
+  output = func(image_buffers, params=p)
+
+  if (output.get("file") is not None):
+    output_fh = open(output_file, 'wb+')
+    output_fh.write(output["file"])
+    output_fh.close()
 
 def buffers_all_same(buffers):
   hashes = []
@@ -51,9 +57,43 @@ def images_all_same(image_files):
   return hashes[1:] == hashes[:-1]
 
 
-class TestFunAlgorithm(unittest.TestCase):
+class TestAveragePels(unittest.TestCase):
   def setUp(self):
-    test_path = join(os.path.dirname(os.path.realpath(__file__)), 'res')
+    print("TestAveragePels:")
+    test_path = join(os.path.dirname(os.path.realpath(__file__)), 'res/average_pels')
+    print('Enumerating test resources in: ' + test_path)
+
+    self.output_file = join(test_path, actual_output + test_fmt)
+    print("Saving output file to: " + self.output_file)
+
+    self.expected_file = join(test_path, expected_output + test_fmt)
+    print("Comparing output file to: " + self.expected_file)
+
+    self.image_files = [join(test_path, f) for f in listdir(test_path) if isfile(join(test_path, f))]
+    if (self.expected_file in self.image_files):
+      self.image_files.remove(self.expected_file)
+    print("Testing with input files:")
+
+    for f in self.image_files:
+      print('\t' + f)
+
+  def tearDown(self):
+    try:
+      print("Ensuring file is removed: " + self.output_file)
+      os.remove(self.output_file)
+      pass
+    except:
+      pass
+
+  def test_average_pels(self):
+    run_test_on(average_pels.average_pels, self.image_files, self.output_file)
+    self.assertTrue(isfile(self.output_file))
+    self.assertTrue(images_all_same([self.output_file, self.expected_file]))
+
+class TestStereo(unittest.TestCase):
+  def setUp(self):
+    print("TestStereo:")
+    test_path = join(os.path.dirname(os.path.realpath(__file__)), 'res/stereo')
     print('Enumerating test resources in: ' + test_path)
 
     self.output_file = join(test_path, actual_output + test_fmt)
@@ -73,12 +113,11 @@ class TestFunAlgorithm(unittest.TestCase):
   def tearDown(self):
     try:
       os.remove(self.output_file)
-      pass
     except:
       pass
 
-  def test_fun(self):
-    run_test_on(fun.average_pels, self.image_files, self.output_file)
+  def test_rectify(self):
+    run_test_on(stereo.rectify, self.image_files, self.output_file)
     self.assertTrue(isfile(self.output_file))
     self.assertTrue(images_all_same([self.output_file, self.expected_file]))
 

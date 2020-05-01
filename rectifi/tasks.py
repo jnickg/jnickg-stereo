@@ -4,7 +4,7 @@ from django.db import transaction
 from workers import task
 from time import sleep
 from .models import Image, RectifyRequest, RectifyRequestImage, RectifyRequestResult
-from .algorithm.fun import average_pels
+from .algorithm.average_pels import average_pels
 import numpy as np
 
 @task()
