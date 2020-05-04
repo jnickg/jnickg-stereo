@@ -13,14 +13,15 @@ test_fmt = '.bmp'
 expected_output = "expected"
 actual_output = "actual"
 
-def run_test_on(func, image_files, output_file):
+def run_test_on(func, image_files, output_file, save_path=None):
   image_buffers = []
   for f in image_files:
     with open(f) as fh:
       image_buffers.append(np.fromfile(fh, dtype=np.uint8))
 
   p = {
-    "fmt": test_fmt
+    "fmt": test_fmt,
+    "save_path": save_path
   }
   output = func(image_buffers, params=p)
 
@@ -93,16 +94,16 @@ class TestAveragePels(unittest.TestCase):
 class TestStereo(unittest.TestCase):
   def setUp(self):
     print("TestStereo:")
-    test_path = join(os.path.dirname(os.path.realpath(__file__)), 'res/stereo')
-    print('Enumerating test resources in: ' + test_path)
+    self.test_path = join(os.path.dirname(os.path.realpath(__file__)), 'res/stereo')
+    print('Enumerating test resources in: ' + self.test_path)
 
-    self.output_file = join(test_path, actual_output + test_fmt)
+    self.output_file = join(self.test_path, actual_output + test_fmt)
     print("Saving output file to: " + self.output_file)
 
-    self.expected_file = join(test_path, expected_output + test_fmt)
+    self.expected_file = join(self.test_path, expected_output + test_fmt)
     print("Comparing output file to: " + self.expected_file)
 
-    self.image_files = [join(test_path, f) for f in listdir(test_path) if isfile(join(test_path, f))]
+    self.image_files = [join(self.test_path, f) for f in listdir(self.test_path) if isfile(join(self.test_path, f))]
     if (self.expected_file in self.image_files):
       self.image_files.remove(self.expected_file)
     print("Testing with input files:")
@@ -117,7 +118,7 @@ class TestStereo(unittest.TestCase):
       pass
 
   def test_rectify(self):
-    run_test_on(stereo.rectify, self.image_files, self.output_file)
+    run_test_on(stereo.rectify, self.image_files, self.output_file, save_path=self.test_path)
     self.assertTrue(isfile(self.output_file))
     self.assertTrue(images_all_same([self.output_file, self.expected_file]))
 

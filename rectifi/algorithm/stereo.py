@@ -1,5 +1,6 @@
 import cv2 as cv
 import numpy as np
+import os.path as path
 
 dflt_params = {
   "fmt":".bmp",
@@ -8,11 +9,22 @@ dflt_params = {
   "chess_col":6,
   "chess_row":9,
   "chess_total":54,
-  "criteria": (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+  "criteria": (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, 0.001),
+  "save_path":"./",
+  "verbose":True
 }
 
 def get_param(key, params):
   return params.get(key, dflt_params.get(key, None))
+
+def print_message(message, isVerbose=True, params=dflt_params):
+  doVerbose = get_param("verbose", params)
+  if (isVerbose is True and doVerbose is True):
+    print(message)
+
+def cv_save(filename, data, params=dflt_params):
+  save_to = path.join(get_param("save_path", params), filename)
+  cv.imwrite(save_to, data)
 
 def rectify(image_buffers, params=dflt_params):
   """Rectifies the given images
@@ -41,9 +53,9 @@ def rectify(image_buffers, params=dflt_params):
   #
   it = iter(cvimgs)
   first_img = next(it)
-  h_expected = len(first_img)
-  w_expected = len(first_img[0])
-  if not all ((len(i) == h_expected and len(i[0]) == w_expected) for i in it):
+  img_h = len(first_img)
+  img_w = len(first_img[0])
+  if not all ((len(i) == img_h and len(i[0]) == img_w) for i in it):
     raise ValueError("Images must all be the same size.")
 
   #
@@ -57,29 +69,57 @@ def rectify(image_buffers, params=dflt_params):
   found = [cv.findChessboardCorners(i, chessboard_size) for i in cvimgs]
   if not all (f[0] is True for f in found):
     raise ValueError("Unable to find calibration points for all images.")
-  if get_param("verbose", params):
-    for f in found:
-      print("Found points: {0}".format(f[1]))
-  # TODO something with this???
-  #cv.drawChessboardCorners
+  for f in found:
+    print_message(f"Found points: {f[1]}", isVerbose=True, params=params)
+  if (get_param("verbose", params)):
+    idx_chess = 0
+    for img, f in zip(cvimgs, found):
+      drawable = img.copy()
+      cv.drawChessboardCorners(drawable, chessboard_size, f[1], f[0])
+      cv_save(f"chessboard_{idx_chess}.bmp", drawable, params=params)
+      idx_chess += 1
 
   #
   # Calibrate images using the chessboard, to remove distortions.
   # See 718
   print("+++Calibrating images...")
+  #
+  calibration = None
+  # Taken from https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_calib3d/py_calibration/py_calibration.html
+  objP = np.zeros((get_param("chess_total",params), 3), np.float32)
+  objP[:,:2] = np.mgrid[0:get_param("chess_col", params), 0:get_param("chess_row", params)].T.reshape(-1, 2)
+  print_message(f"Using Object Points: {objP}", isVerbose=True, params=params)
+  objpoints = []
+  imgpoints = []
+  # Here we assume all images had a chessboard found, which may not always be true if we change this in the future
   for i, pt in zip(cvimgs, [f[1] for f in found]):
-    objP = np.zeros((get_param("chess_total",params), 3), np.float32)
-    objP[:,:2] = np.mgrid[0:get_param("chess_row", params), 0:get_param("chess_col", params)].T.reshape(-1, 2)
-
-    objpoints = []
-    imgpoints = []
     objpoints.append(objP)
-    cv.cornerSubPix(i, pt, (11, 11), (-1, -1), get_param("criteria", params))
-    imgpoints.append(pt)
+    pt_refined = cv.cornerSubPix(i, pt, (11, 11), (-1, -1), get_param("criteria", params))
+    imgpoints.append(pt_refined)
 
-    ret, mtx, dist, rvecs, tvecs = cv.calibrateCamera(objpoints, imgpoints, i.shape[::-1], None, None)
-    if get_param("verbose", params):
-      print("Successfully calibrated! ret:{0} mtx:{1} dist:{2} rvecs:{3} tvecs:{4}".format(ret, mtx, dist, rvecs, tvecs))
+  ret, mtx, dist, rvecs, tvecs = cv.calibrateCamera(objpoints, imgpoints, i.shape[::-1], None, None)
+  print_message(f"Successfully calibrated! ret:{ret} mtx:{mtx} dist:{dist} rvecs:{rvecs} tvecs:{tvecs}", isVerbose=True, params=params)
+  calibration = [{
+    "ret":ret,
+    "mtx":mtx,
+    "dist":dist,
+    "rvecs":rvecs,
+    "tvecs":tvecs} for i in cvimgs]
+
+  print("+++Undistorting images...")
+  undistorted = []
+  idx_undistort = 0
+  for (i, cal) in zip(cvimgs, calibration):
+    # Taken from: https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_calib3d/py_calibration/py_calibration.html
+    refined_mtx, roi = cv.getOptimalNewCameraMatrix(cal["mtx"], cal["dist"], (img_w, img_h), 0, newImgSize=(img_w, img_h))
+    print_message(f"Calculated refined camera matrix and ROI. MTX: {refined_mtx}, ROI: {roi}", isVerbose=True, params=params)
+    undist = cv.undistort(i, cal["mtx"], cal["dist"], None, None)
+    x,y,w,h = roi
+    undist = undist[y:y+h, x:x+w]
+    undistorted.append(undist)
+    if (get_param("verbose", params)):
+      cv_save(f"undistorted_{idx_undistort}.bmp", undist, params=params)
+    idx_undistort += 1 
 
   #
   # Compute Fundamental matrix between images. This matrix relates the two
