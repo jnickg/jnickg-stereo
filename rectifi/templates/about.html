@@ -10,16 +10,45 @@
 {% block content %}
 <div class="row">
   <h2>What is Rectifi?</h2>
+</div>
+<div class="row">
   <p>Rectifi is a simple tool to let you upload images taken with your smartphone, and get some cool data back.</p>
   <p><strong>Note:</strong> Currently, <em>Rectifi</em> doesn't do a whole lot. The plumbing is in place, but the algorithm is some random OpenCV code that isn't very exciting. Eventually, it will let you get 3D point clouds from a few imags taken with your mobile device.</p>
   <p>When that's supported, all you have to do is:</p>
   <ol>
     <li>Pick a subject that you want to make a point cloud for.</li>
-    <li>Print out <a href="#TBD">this</a> calibration image on a piece of paper, tape it to a flat surface.</li>
+    <li>Print out <a href="{% static "chessboard_6x9.png" %}">this</a> calibration image on a piece of paper, and fasten it to a flat surface such as a clipboard.</li>
     <li>Take a few imags from different angles, ensuring the calibration image is clearly visible in each of them.</li>
     <li>Upload them using the form, and hit the <button class="button-primary">Rectify!</button> button.</button></li>
     <li>Wait a couple minutes for the algorithm to run.</li>
   </ol>
   <p>...And then bam! Your results page will be populated with all the output data, for your enjoyment.</p>
+</div>
+<div class="row">
+  <h2>What is "<em>Calibration</em>?"</h2>
+</div>
+<div class="row">
+  <div class="eight columns">
+    <p>Calibration is something you do to a camera to correct <em>radial distortion</em>, usually before doing something else. Radial distortion is caused by bending light through a lens, and is especially common in the lenses found on smartphones (Even $1500 professional lenses have radial distortion—your <em>phone</em> didn't cost that much, much less its lens)</p>
+    <p>When trying to extract 3D objects from the images you upload, <em>Rectifi</em> has to first get past radial distortion to try and line the objects up. The easiest way to do that is to include the calibration image in each of your photos, and take all the photos from the same camera. That way, both the calibration data <em>and</em> the 3D object data are in the same image. Just make sure the calibration grid doesn't <em>occlude</em> (cover up) the object!</p>
+  </div>
+  <div class="four columns">
+    <label for="grid"><em>{{ r.notes }}</em></label>
+    <img class="u-full-width" id="grid" src="{% static "chessboard_6x9.png" %}" alt="Chessboard grid calibration image" />
+    <div class="caption">A chessboard calibration image.</div>
+  </div>
+</div>
+<div class="row">
+  <h2>What is "<em>Rectification</em>?"</h2>
+</div>
+<div class="row">
+  <div class="five columns">
+    <label for="rectified"><em>{{ r.notes }}</em></label>
+    <img class="u-full-width" id="rectified" src="{% static "rectified_epipolar.png" %}" alt="Image showing rectified epipolar geometry" />
+    <div class="caption">Rectified epipolar geometry. Notice that the horizontal lines in both images touch the same physical objects.</div>
+  </div>
+  <div class="seven columns">
+    <p><em>Stereoscopic rectification</em> is an extremely math-heavy geometric process to take two iamges of the same thing, taken from different angles, and stretching them so that horizontal lines correpond to the same physical space in the picture. Doing this makes it a lot easier to calculate how far away the objects in the picture are, because we can scan one line at a time and triangulate the differences we see.</p>
+  </div>
 </div>
 {% endblock %}
