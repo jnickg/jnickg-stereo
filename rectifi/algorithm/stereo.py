@@ -1,3 +1,4 @@
+import sys
 import cv2 as cv
 import numpy as np
 import os.path as path
@@ -18,14 +19,35 @@ dflt_params = {
 def get_param(key, params):
   return params.get(key, dflt_params.get(key, None))
 
-def print_message(message, isVerbose=True, params=dflt_params):
+def print_message(message, isVerbose=True, params=dflt_params, do_newline=True):
   doVerbose = get_param("verbose", params)
-  if (isVerbose is True and doVerbose is True):
-    print(f"\n\n{message}")
+  if (isVerbose is False or doVerbose is True):
+    if (do_newline is True):
+      print(f"\n\n{message}")
+    else:
+      print(message, end=" ")
+    sys.stdout.flush()
 
 def cv_save(filename, data, params=dflt_params):
   save_to = path.join(get_param("save_path", params), filename)
+  print_message(f"Writing to file {save_to}...", params=params)
   cv.imwrite(save_to, data)
+
+# Taken from https://docs.opencv.org/master/da/de9/tutorial_py_epipolar_geometry.html
+def cv_drawlines(img1,img2,lines,pts1,pts2):
+    ''' img1 - image on which we draw the epilines for the points in img2
+        lines - corresponding epilines '''
+    r,c = img1.shape
+    img1 = cv.cvtColor(img1,cv.COLOR_GRAY2BGR)
+    img2 = cv.cvtColor(img2,cv.COLOR_GRAY2BGR)
+    for r,pt1,pt2 in zip(lines,pts1,pts2):
+        color = tuple(np.random.randint(0,255,3).tolist())
+        x0,y0 = map(int, [0, -r[2]/r[1] ])
+        x1,y1 = map(int, [c, -(r[2]+r[0]*c)/r[1] ])
+        img1 = cv.line(img1, (x0,y0), (x1,y1), color,1)
+        img1 = cv.circle(img1,tuple(pt1),5,color,-1)
+        img2 = cv.circle(img2,tuple(pt2),5,color,-1)
+    return img1,img2
 
 def rectify(image_buffers, params=dflt_params):
   """Rectifies the given images
@@ -49,6 +71,7 @@ def rectify(image_buffers, params=dflt_params):
     cvimg = cv.imdecode(imgbuf, cv.IMREAD_GRAYSCALE)
     if cvimg is None:
       raise ValueError("Failed to decode provided image")
+    print_message("OK", params=params, do_newline=False)
     cvimgs.append(cvimg)
 
   #
@@ -60,8 +83,10 @@ def rectify(image_buffers, params=dflt_params):
   img_w = len(first_img[0])
   if not all ((len(i) == img_h and len(i[0]) == img_w) for i in cvimg_iter):
     raise ValueError("Images must all be the same size.") # (TODO normalize image spaces?)
+  print_message("Image sizes OK", params=params)
   if not all ((f is True) for f, _ in [cv.findChessboardCorners(i, chessboard_size, flags=cv.CALIB_CB_FAST_CHECK) for i in cvimgs]):
     raise ValueError("Not all images have chessboard patterns")
+  print_message("Image contents OK", params=params)
 
   #
   # Capture chessboard corners from the calibration matrix we assume to be in
@@ -91,7 +116,6 @@ def rectify(image_buffers, params=dflt_params):
   # Taken from https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_calib3d/py_calibration/py_calibration.html
   objP = np.zeros((get_param("chess_total",params), 3), np.float32)
   objP[:,:2] = np.mgrid[0:get_param("chess_col", params), 0:get_param("chess_row", params)].T.reshape(-1, 2)
-  print_message(f"Using Object Points:\n{objP}", isVerbose=True, params=params)
   objpoints = []
   imgpoints = []
   # Here we assume all images had a chessboard found, which may not always be true if we change validation above
@@ -145,14 +169,11 @@ def rectify(image_buffers, params=dflt_params):
   # Taken from: https://docs.opencv.org/master/da/de9/tutorial_py_epipolar_geometry.html
   print_message("+++Matching feature points between image pairs...", isVerbose=False)
   #
+  idx_left_match = 0
+  idx_right_match = 1
   for pair in itt.combinations(zip(undistorted, feature_results), 2):
-    left_side, right_side = pair
-    left_img = left_side[0]
-    left_kp  = left_side[1][0]
-    left_des = left_side[1][1]
-    right_img = right_side[0]
-    right_kp  = right_side[1][0]
-    right_des = right_side[1][1]
+    (left_img, (left_kp, left_des)), (right_img, (right_kp, right_des))  = pair
+
     FLANN_INDEX_KDTREE = 1 # for SIFT
     FLANN_INDEX_LSH = 6 # for ORB
     index_params = dict(algorithm=FLANN_INDEX_LSH, table_number=6, key_size=12, multi_probe_level=1)
@@ -178,26 +199,34 @@ def rectify(image_buffers, params=dflt_params):
         right_pts.append(left_kp[m.trainIdx].pt)
         left_pts.append(right_kp[m.queryIdx].pt)
     print_message(f"Found {len(good)} good matches between images", params=params)
-  #
-  # Find homographies between pairs of images. See 663
-  #
-  #cv.findHomography
-  #cv.RANSAC
-  #
 
-  #
-  # Compute Fundamental matrix between images. This matrix relates the two
-  # images together (in pixel space rather than physical space, as E does),
-  # so we will need to do this for all images.
-  # See 719
-  print_message("+++Computing fundamental matrix between images...", isVerbose=False)
-  #
+    left_pts = np.int32(left_pts)
+    right_pts = np.int32(right_pts)
+    F, mask = cv.findFundamentalMat(left_pts, right_pts, cv.FM_RANSAC)
+    print_message(f"Found Fundamental Matrix F:\n{F}", params=params)
 
-  # All found chessboard corners must be inliers, so they must satisfy epipolar
-  # constraints. Thus, use the 8-point algorithm because it's fastest & most
-  # accurate (in this case)
-  #cv.findFundamentalMat
+    # Select only inliers
+    left_pts = left_pts[mask.ravel()==1]
+    right_pts = right_pts[mask.ravel()==1]
+    print_message(f"There are {len(left_pts)} inliers for left, {len(right_pts)} inliers for right.", params=params)
 
+    # Find epilines corresponding to points in right image (second image) and
+    # drawing its lines on left image
+    lines1 = cv.computeCorrespondEpilines(right_pts.reshape(-1,1,2), 2,F)
+    lines1 = lines1.reshape(-1,3)
+    # Find epilines corresponding to points in left image (first image) and
+    # drawing its lines on right image
+    lines2 = cv.computeCorrespondEpilines(left_pts.reshape(-1,1,2), 1,F)
+    lines2 = lines2.reshape(-1,3)
+
+    if (get_param("verbose", params)):
+      left_lines, _  = cv_drawlines(left_img,right_img,lines1,left_pts,right_pts)
+      right_lines, _ = cv_drawlines(right_img,left_img,lines2,right_pts,left_pts)
+      cv_save(f"epilines_{idx_left_match}_{idx_right_match}.bmp", left_lines, params=params)
+      cv_save(f"epilines_{idx_right_match}_{idx_left_match}.bmp", right_lines, params=params)
+      idx_left_match += 1
+      idx_right_match += 1
+  
   #
   # Check return value of findFundamentalMat to see if we are forming a
   # degenerate configuration
