@@ -6,6 +6,7 @@ django-workers
 gunicorn
 numpy
 opencv-python
+opencv-contrib-python
 Pillow
 python-dotenv
 requests

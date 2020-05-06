@@ -103,7 +103,8 @@ class TestStereo(unittest.TestCase):
     self.expected_file = join(self.test_path, expected_output + test_fmt)
     print("Comparing output file to: " + self.expected_file)
 
-    self.image_files = [join(self.test_path, f) for f in listdir(self.test_path) if isfile(join(self.test_path, f))]
+    self.start_files = [join(self.test_path, f) for f in listdir(self.test_path) if isfile(join(self.test_path, f))]
+    self.image_files = self.start_files
     if (self.expected_file in self.image_files):
       self.image_files.remove(self.expected_file)
     print("Testing with input files:")
@@ -112,10 +113,17 @@ class TestStereo(unittest.TestCase):
       print('\t' + f)
 
   def tearDown(self):
+    current_files = [join(self.test_path, f) for f in listdir(self.test_path) if isfile(join(self.test_path, f))]
+    for f in [f for f in current_files if f not in self.start_files]:
+      try:
+        os.remove(f)
+        #pass
+      except:
+        print(f"Failed to remove file: {f}")
     try:
       os.remove(self.output_file)
     except:
-      pass
+      print(f"Failed to remove file: {self.output_file}")
 
   def test_rectify(self):
     run_test_on(stereo.rectify, self.image_files, self.output_file, save_path=self.test_path)
