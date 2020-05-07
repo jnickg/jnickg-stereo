@@ -1,4 +1,5 @@
 import sys
+import time
 import cv2 as cv
 import numpy as np
 import os.path as path
@@ -13,7 +14,9 @@ dflt_params = {
   "chess_total":54,
   "criteria": (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, 0.001),
   "save_path":"./",
-  "verbose":True
+  "verbose":True,
+  "do_resize":True,
+  "max_wide_len":1000
 }
 
 def get_param(key, params):
@@ -79,14 +82,26 @@ def rectify(image_buffers, params=dflt_params):
   #
   cvimg_iter = iter(cvimgs)
   first_img = next(cvimg_iter)
-  img_h = len(first_img)
-  img_w = len(first_img[0])
-  if not all ((len(i) == img_h and len(i[0]) == img_w) for i in cvimg_iter):
+  scale_factor = get_param("max_wide_len", params=params) / max(first_img.shape[1], first_img.shape[0])
+  img_h_orig = len(first_img)
+  img_w_orig = len(first_img[0])
+  if not all ((len(i) == img_h_orig and len(i[0]) == img_w_orig) for i in cvimg_iter):
     raise ValueError("Images must all be the same size.") # (TODO normalize image spaces?)
-  print_message("Image sizes OK", params=params)
+  print_message("Image shapes OK", params=params)
+  if (get_param("do_resize", params=params)):
+    cvimgs = [cv.resize(i, (int(i.shape[1] * scale_factor), int(i.shape[0] * scale_factor)), interpolation=cv.INTER_AREA) for i in cvimgs]
+    img_h = cvimgs[0].shape[0]
+    img_w = cvimgs[0].shape[1]
+    print_message(f"Resized images from {img_w_orig}x{img_h_orig} to {img_w}x{img_h}")
+  else:
+    img_h = img_h_orig
+    img_w = img_w_orig
+  print_message(f"Image sizes OK: {img_w}x{img_h}", params=params)
   if not all ((f is True) for f, _ in [cv.findChessboardCorners(i, chessboard_size, flags=cv.CALIB_CB_FAST_CHECK) for i in cvimgs]):
     raise ValueError("Not all images have chessboard patterns")
   print_message("Image contents OK", params=params)
+  
+  time.sleep(1.0)
 
   #
   # Capture chessboard corners from the calibration matrix we assume to be in
@@ -126,15 +141,15 @@ def rectify(image_buffers, params=dflt_params):
 
   ret, mtx, dist, rvecs, tvecs = cv.calibrateCamera(objpoints, imgpoints, i.shape[::-1], None, None)
   print_message(f"Successfully calibrated!\nret: {ret}\nmtx:\n{mtx}\ndist:\n{dist}\nrvecs:\n{rvecs}\ntvecs:\n{tvecs}", isVerbose=True, params=params)
-
+  # Taken from: https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_calib3d/py_calibration/py_calibration.html
+  refined_mtx, roi = cv.getOptimalNewCameraMatrix(mtx, dist, (img_w, img_h), 0, newImgSize=(img_w, img_h))
+  print_message(f"Calculated refined camera matrix and ROI.\nMTX: {refined_mtx},\nROI: {roi}", isVerbose=True, params=params)
+  
   print_message("+++Undistorting images...", isVerbose=False)
   undistorted = []
   idx_undistort = 0
   for i in cvimgs:
-    # Taken from: https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_calib3d/py_calibration/py_calibration.html
-    refined_mtx, roi = cv.getOptimalNewCameraMatrix(mtx, dist, (img_w, img_h), 0, newImgSize=(img_w, img_h))
-    print_message(f"Calculated refined camera matrix and ROI.\nMTX: {refined_mtx},\nROI: {roi}", isVerbose=True, params=params)
-    undist = cv.undistort(i, mtx, dist, None, None)
+    undist = cv.undistort(i, mtx, dist, None, newCameraMatrix=refined_mtx)
     x,y,w,h = roi
     undist = undist[y:y+h, x:x+w]
     undistorted.append(undist)
@@ -144,11 +159,16 @@ def rectify(image_buffers, params=dflt_params):
 
   # Might have useful stuff: https://www.cc.gatech.edu/classes/AY2016/cs4476_fall/results/proj3/html/cbunch7/index.html
 
+  # Here it may be useful to segment the images and then look there for keypoints using a mask
+
+  print_message("+++Attempting to resolve epilines with Chessboard points...", isVerbose=False)
+
+
   #
   print_message("+++Extracting feature points from undistorted images...", isVerbose=False)
   # Inspired by: https://docs.opencv.org/master/da/df5/tutorial_py_sift_intro.html
   #
-  feature_finder = cv.ORB_create()
+  feature_finder = cv.ORB_create(nfeatures=1000)
   feature_results = []
   for i in undistorted:
     kp = feature_finder.detect(i, None)
@@ -179,6 +199,7 @@ def rectify(image_buffers, params=dflt_params):
     index_params = dict(algorithm=FLANN_INDEX_LSH, table_number=6, key_size=12, multi_probe_level=1)
     search_params = dict(checks=50)
 
+    # https://docs.opencv.org/2.4/doc/tutorials/features2d/feature_flann_matcher/feature_flann_matcher.html
     matcher = cv.FlannBasedMatcher(index_params, search_params)
     knn_matches = matcher.knnMatch(left_des, right_des, k=2)
     print_message(f"Matcher found {len(knn_matches)} matches.", params=params)
@@ -189,7 +210,7 @@ def rectify(image_buffers, params=dflt_params):
     left_pts = []
     right_pts = []
 
-    # ratio test as per Lowe's paper
+    # ratio test as per Lowe's paper: https://www.cs.ubc.ca/~lowe/papers/ijcv04.pdf
     idx_match = 0
     for _, match_tuple in enumerate(knn_matches):
       idx_match += 1
@@ -224,9 +245,33 @@ def rectify(image_buffers, params=dflt_params):
       right_lines, _ = cv_drawlines(right_img,left_img,lines2,right_pts,left_pts)
       cv_save(f"epilines_{idx_left_match}_{idx_right_match}.bmp", left_lines, params=params)
       cv_save(f"epilines_{idx_right_match}_{idx_left_match}.bmp", right_lines, params=params)
-      idx_left_match += 1
-      idx_right_match += 1
-  
+
+
+    # No threshold because we selected only inliers, above
+    rv, H1, H2 = cv.stereoRectifyUncalibrated(left_pts, right_pts, F, (img_w, img_h), threshold=0.0)
+    if rv is not True:
+      raise ValueError("Failed to rectify images.")
+    print_message(f"Calculated Homography Matrices:\nH1: {H1}\nH2: {H2}", params=params)
+
+    # See last comment in https://docs.opencv.org/2.4/modules/imgproc/doc/geometric_transformations.html#initundistortrectifymap
+    # Also slide 25: http://ece631web.groups.et.byu.net/Lectures/ECEn631%2014%20-%20Calibration%20and%20Rectification.pdf
+    R1 = np.linalg.inv(mtx).dot(H1).dot(mtx)
+    map1_1, map1_2 = cv.initUndistortRectifyMap(mtx, dist, R1, refined_mtx, (img_w, img_h), cv.CV_32FC1)
+    print_message(f"Rectify maps:\nmap1_1: {map1_1}\nmat1_2: {map1_2} ", params=params)
+    R2 = np.linalg.inv(mtx).dot(H2).dot(mtx)
+    map2_1, map2_2 = cv.initUndistortRectifyMap(mtx, dist, R2, refined_mtx, (img_w, img_h), cv.CV_32FC1)
+    print_message(f"Rectify maps:\nmap2_1: {map2_1}\nmat2_2: {map2_2} ", params=params)
+
+    if (get_param("verbose", params)):
+      left_remap = cv.remap(left_img, map1_1, map1_2, cv.INTER_LANCZOS4)
+      right_remap = cv.remap(right_img, map2_1, map2_2, cv.INTER_LANCZOS4)
+      cv_save(f"remap_{idx_left_match}_{idx_right_match}.bmp", left_remap, params=params)
+      cv_save(f"remap_{idx_right_match}_{idx_left_match}.bmp", right_remap, params=params)
+
+    idx_left_match += 1
+    idx_right_match += 1
+
+
   #
   # Check return value of findFundamentalMat to see if we are forming a
   # degenerate configuration

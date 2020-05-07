@@ -114,16 +114,21 @@ class TestStereo(unittest.TestCase):
 
   def tearDown(self):
     current_files = [join(self.test_path, f) for f in listdir(self.test_path) if isfile(join(self.test_path, f))]
+    dump_dir = "c:/temp/stereo/"
+    if not os.path.isdir(dump_dir):
+      os.makedirs(dump_dir)
+    print(f"Moving test artifacts to: {dump_dir} ...")
     for f in [f for f in current_files if f not in self.start_files]:
       try:
-        os.remove(f)
-        #pass
+        base = os.path.basename(f)
+        dest = os.path.join(dump_dir, base)
+        os.replace(f, dest)
       except:
-        print(f"Failed to remove file: {f}")
+        print(f"Failed to move file: {f}")
     try:
       os.remove(self.output_file)
     except:
-      print(f"Failed to remove file: {self.output_file}")
+      pass
 
   def test_rectify(self):
     run_test_on(stereo.rectify, self.image_files, self.output_file, save_path=self.test_path)
