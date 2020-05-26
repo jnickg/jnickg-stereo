@@ -48,6 +48,7 @@ def cv_drawlines(img1,img2,lines,pts1,pts2):
         x0,y0 = map(int, [0, -r[2]/r[1] ])
         x1,y1 = map(int, [c, -(r[2]+r[0]*c)/r[1] ])
         img1 = cv.line(img1, (x0,y0), (x1,y1), color,1)
+        print(f"pt1: {pt1}")
         img1 = cv.circle(img1,tuple(pt1),5,color,-1)
         img2 = cv.circle(img2,tuple(pt2),5,color,-1)
     return img1,img2
@@ -161,14 +162,15 @@ def rectify(image_buffers, params=dflt_params):
 
   # Here it may be useful to segment the images and then look there for keypoints using a mask
 
-  print_message("+++Attempting to resolve epilines with Chessboard points...", isVerbose=False)
-
+  print_message("+++Undistorting Chessboard points...", isVerbose=False)
+  chess_points = [f[1] for f in found]
+  chess_points = [cv.undistortPoints(cp, mtx, dist) for cp in chess_points]
 
   #
   print_message("+++Extracting feature points from undistorted images...", isVerbose=False)
   # Inspired by: https://docs.opencv.org/master/da/df5/tutorial_py_sift_intro.html
   #
-  feature_finder = cv.ORB_create(nfeatures=1000)
+  feature_finder = cv.ORB_create(nfeatures=6000)
   feature_results = []
   for i in undistorted:
     kp = feature_finder.detect(i, None)
@@ -191,8 +193,8 @@ def rectify(image_buffers, params=dflt_params):
   #
   idx_left_match = 0
   idx_right_match = 1
-  for pair in itt.combinations(zip(undistorted, feature_results), 2):
-    (left_img, (left_kp, left_des)), (right_img, (right_kp, right_des))  = pair
+  for pair in itt.combinations(zip(undistorted, feature_results, chess_points), 2):
+    (left_img, (left_kp, left_des), left_chess_pts), (right_img, (right_kp, right_des), right_chess_pts)  = pair
 
     FLANN_INDEX_KDTREE = 1 # for SIFT
     FLANN_INDEX_LSH = 6 # for ORB
@@ -235,10 +237,12 @@ def rectify(image_buffers, params=dflt_params):
     # drawing its lines on left image
     lines1 = cv.computeCorrespondEpilines(right_pts.reshape(-1,1,2), 2,F)
     lines1 = lines1.reshape(-1,3)
+    print_message(f"Computed Epilines lines1:\n{lines1}", params=params)
     # Find epilines corresponding to points in left image (first image) and
     # drawing its lines on right image
     lines2 = cv.computeCorrespondEpilines(left_pts.reshape(-1,1,2), 1,F)
     lines2 = lines2.reshape(-1,3)
+    print_message(f"Computed Epilines lines2:\n{lines2}", params=params)
 
     if (get_param("verbose", params)):
       left_lines, _  = cv_drawlines(left_img,right_img,lines1,left_pts,right_pts)
@@ -267,6 +271,46 @@ def rectify(image_buffers, params=dflt_params):
       right_remap = cv.remap(right_img, map2_1, map2_2, cv.INTER_LANCZOS4)
       cv_save(f"remap_{idx_left_match}_{idx_right_match}.bmp", left_remap, params=params)
       cv_save(f"remap_{idx_right_match}_{idx_left_match}.bmp", right_remap, params=params)
+
+    # print_message("+++Attempting to resolve epilines with Chessboard points...", isVerbose=False)
+    # #left_chess_pts = np.int32(left_chess_pts)
+    # #right_chess_pts = np.int32(right_chess_pts)
+    # chess_F, chess_mask = cv.findFundamentalMat(left_chess_pts, right_chess_pts, cv.FM_8POINT)
+    # print_message(f"Found Fundamental Matrix chess_F:\n{chess_F}", params=params)
+
+    # # Find epilines corresponding to points in right image (second image) and
+    # # drawing its lines on left image
+    # chess_lines1 = cv.computeCorrespondEpilines(right_chess_pts.reshape(-1,1,2), 2,chess_F)
+    # chess_lines1 = chess_lines1.reshape(-1,3)
+    # print_message(f"Computed Chess Epilines chess_lines1:\n{chess_lines1}", params=params)
+    # # Find epilines corresponding to points in left image (first image) and
+    # # drawing its lines on right image
+    # chess_lines2 = cv.computeCorrespondEpilines(left_chess_pts.reshape(-1,1,2), 1,chess_F)
+    # chess_lines2 = chess_lines2.reshape(-1,3)
+    # print_message(f"Computed Chess Epilines chess_lines2:\n{chess_lines2}", params=params)
+
+    # if (get_param("verbose", params)):
+    #   chess_left_lines, _  = cv_drawlines(left_img, right_img, chess_lines1, left_chess_pts, right_chess_pts)
+    #   chess_right_lines, _ = cv_drawlines(right_img, left_img, chess_lines2, right_chess_pts, left_chess_pts)
+    #   cv_save(f"chess_epilines_{idx_left_match}_{idx_right_match}.bmp", chess_left_lines, params=params)
+    #   cv_save(f"chess_epilines_{idx_right_match}_{idx_left_match}.bmp", chess_right_lines, params=params)
+
+    # rv, chess_H1, chess_H2 = cv.stereoRectifyUncalibrated(left_chess_pts, right_chess_pts, chess_F, (img_w, img_h), threshold=0.0)
+    # if rv is not True:
+    #   raise ValueError("Failed to rectify images.")
+    # print_message(f"Calculated Homography Matrices:\nchess_H1: {chess_H1}\nchess_H2: {chess_H2}", params=params)
+    # chess_R1 = np.linalg.inv(mtx).dot(chess_H1).dot(mtx)
+    # chess_map1_1, chess_map1_2 = cv.initUndistortRectifyMap(mtx, dist, chess_R1, refined_mtx, (img_w, img_h), cv.CV_32FC1)
+    # print_message(f"Rectify maps:\nchess_map1_1: {chess_map1_1}\nchess_mat1_2: {chess_map1_2} ", params=params)
+    # chess_R2 = np.linalg.inv(mtx).dot(chess_H2).dot(mtx)
+    # chess_map2_1, chess_map2_2 = cv.initUndistortRectifyMap(mtx, dist, chess_R2, refined_mtx, (img_w, img_h), cv.CV_32FC1)
+    # print_message(f"Rectify maps:\nchess_map2_1: {chess_map2_1}\nchess_mat2_2: {chess_map2_2} ", params=params)
+
+    # if (get_param("verbose", params)):
+    #   chess_left_remap = cv.remap(left_img, chess_map1_1, chess_map1_2, cv.INTER_LANCZOS4)
+    #   chess_right_remap = cv.remap(right_img, chess_map2_1, chess_map2_2, cv.INTER_LANCZOS4)
+    #   cv_save(f"chess_remap_{idx_left_match}_{idx_right_match}.bmp", chess_left_remap, params=params)
+    #   cv_save(f"chess_remap_{idx_right_match}_{idx_left_match}.bmp", chess_right_remap, params=params)
 
     idx_left_match += 1
     idx_right_match += 1
