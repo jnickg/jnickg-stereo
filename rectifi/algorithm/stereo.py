@@ -99,7 +99,8 @@ def rectify(image_buffers, params=dflt_params):
     img_w = img_w_orig
   print_message(f"Image sizes OK: {img_w}x{img_h}", params=params)
   if not all ((f is True) for f, _ in [cv.findChessboardCorners(i, chessboard_size, flags=cv.CALIB_CB_FAST_CHECK) for i in cvimgs]):
-    raise ValueError("Not all images have chessboard patterns")
+    print_message("WARNING: Quick check could not find chessboard patterns in all images. Image quality may be an issue", params=params)
+    #raise ValueError("Not all images have chessboard patterns")
   print_message("Image contents OK", params=params)
   
   time.sleep(1.0)
@@ -109,7 +110,7 @@ def rectify(image_buffers, params=dflt_params):
   # the photo. If any of the photos don't have a matrix, dump it and see if we
   # can continue without them
   # See 717
-  print_message("+++Finding chessboard corners...", isVerbose=False)
+  print_message("+++Finding calibration grid...", isVerbose=False)
   #
   found = [cv.findChessboardCorners(i, chessboard_size) for i in cvimgs]
   if not all (f[0] is True for f in found):
@@ -140,8 +141,8 @@ def rectify(image_buffers, params=dflt_params):
     pt_refined = cv.cornerSubPix(i, pt, (11, 11), (-1, -1), get_param("criteria", params))
     imgpoints.append(pt_refined)
 
-  ret, mtx, dist, rvecs, tvecs = cv.calibrateCamera(objpoints, imgpoints, i.shape[::-1], None, None)
-  print_message(f"Successfully calibrated!\nret: {ret}\nmtx:\n{mtx}\ndist:\n{dist}\nrvecs:\n{rvecs}\ntvecs:\n{tvecs}", isVerbose=True, params=params)
+  rms, mtx, dist, rvecs, tvecs = cv.calibrateCamera(objpoints, imgpoints, i.shape[::-1], None, None)
+  print_message(f"Successfully calibrated!\rms: {rms}\nmtx:\n{mtx}\ndist:\n{dist}\nrvecs:\n{rvecs}\ntvecs:\n{tvecs}", isVerbose=True, params=params)
   # Taken from: https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_calib3d/py_calibration/py_calibration.html
   refined_mtx, roi = cv.getOptimalNewCameraMatrix(mtx, dist, (img_w, img_h), 0, newImgSize=(img_w, img_h))
   print_message(f"Calculated refined camera matrix and ROI.\nMTX: {refined_mtx},\nROI: {roi}", isVerbose=True, params=params)
@@ -225,13 +226,20 @@ def rectify(image_buffers, params=dflt_params):
 
     left_pts = np.int32(left_pts)
     right_pts = np.int32(right_pts)
-    F, mask = cv.findFundamentalMat(left_pts, right_pts, cv.FM_RANSAC)
+    F, mask = cv.findFundamentalMat(np.int32([kp.pt for kp in left_kp]), np.int32([kp.pt for kp in right_kp]), cv.FM_RANSAC, ransacReprojThreshold=1.0, confidence=0.9999)
     print_message(f"Found Fundamental Matrix F:\n{F}", params=params)
 
+    # TODO TODO TODO TODO TODO
+    # TODO TODO TODO TODO TODO
+    # Remove Flann Based Matcher and just use RANSAC Below. Clean this up!!!
+    # TODO TODO TODO TODO TODO
+    # TODO TODO TODO TODO TODO
+
+
     # Select only inliers
-    left_pts = left_pts[mask.ravel()==1]
-    right_pts = right_pts[mask.ravel()==1]
-    print_message(f"There are {len(left_pts)} inliers for left, {len(right_pts)} inliers for right.", params=params)
+    #left_pts = left_pts[mask.ravel()==1]
+    #right_pts = right_pts[mask.ravel()==1]
+    #print_message(f"There are {len(left_pts)} inliers for left, {len(right_pts)} inliers for right.", params=params)
 
     # Find epilines corresponding to points in right image (second image) and
     # drawing its lines on left image
