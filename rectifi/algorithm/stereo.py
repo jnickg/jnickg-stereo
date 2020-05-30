@@ -22,9 +22,9 @@ dflt_params = {
 def get_param(key, params):
   return params.get(key, dflt_params.get(key, None))
 
-def print_message(message, isVerbose=True, params=dflt_params, do_newline=True):
-  doVerbose = get_param("verbose", params)
-  if (isVerbose is False or doVerbose is True):
+def print_message(message, is_verbose=True, params=dflt_params, do_newline=True):
+  do_verbose = get_param("verbose", params)
+  if (is_verbose is False or do_verbose is True):
     if (do_newline is True):
       print(f"\n\n{message}")
     else:
@@ -68,7 +68,7 @@ def rectify(image_buffers, params=dflt_params):
 
 
   #
-  print_message("+++Reading input images, decoding to processing format...", isVerbose=False)
+  print_message("+++Reading input images, decoding to processing format...", is_verbose=False)
   #
   cvimgs = []
   for imgbuf in image_buffers:
@@ -79,7 +79,7 @@ def rectify(image_buffers, params=dflt_params):
     cvimgs.append(cvimg)
 
   #
-  print_message("+++Validating input images...", isVerbose=False)
+  print_message("+++Validating input images...", is_verbose=False)
   #
   cvimg_iter = iter(cvimgs)
   first_img = next(cvimg_iter)
@@ -110,7 +110,7 @@ def rectify(image_buffers, params=dflt_params):
   # the photo. If any of the photos don't have a matrix, dump it and see if we
   # can continue without them
   # See 717
-  print_message("+++Finding calibration grid...", isVerbose=False)
+  print_message("+++Finding calibration grid...", is_verbose=False)
   #
   found = [cv.findChessboardCorners(i, chessboard_size) for i in cvimgs]
   if not all (f[0] is True for f in found):
@@ -118,7 +118,7 @@ def rectify(image_buffers, params=dflt_params):
   if (get_param("verbose", params)):
     idx_chess = 0
     for img, f in zip(cvimgs, found):
-      print_message(f"Found points for image {idx_chess}:\n{f[1]}", isVerbose=True, params=params)
+      print_message(f"Found points for image {idx_chess}:\n{f[1]}", is_verbose=True, params=params)
       drawable = img.copy()
       cv.drawChessboardCorners(drawable, chessboard_size, f[1], f[0])
       cv_save(f"chessboard_{idx_chess}.bmp", drawable, params=params)
@@ -127,7 +127,7 @@ def rectify(image_buffers, params=dflt_params):
   #
   # Calibrate images using the chessboard, to remove distortions.
   # See 718
-  print_message("+++Calibrating camera based on images...", isVerbose=False)
+  print_message("+++Calibrating camera based on images...", is_verbose=False)
   #
 
   # Taken from https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_calib3d/py_calibration/py_calibration.html
@@ -142,33 +142,34 @@ def rectify(image_buffers, params=dflt_params):
     imgpoints.append(pt_refined)
 
   rms, mtx, dist, rvecs, tvecs = cv.calibrateCamera(objpoints, imgpoints, i.shape[::-1], None, None)
-  print_message(f"Successfully calibrated!\rms: {rms}\nmtx:\n{mtx}\ndist:\n{dist}\nrvecs:\n{rvecs}\ntvecs:\n{tvecs}", isVerbose=True, params=params)
+  print_message(f"Successfully calibrated!\nrms: {rms}\nmtx:\n{mtx}\ndist:\n{dist}\nrvecs:\n{rvecs}\ntvecs:\n{tvecs}", is_verbose=True, params=params)
   # Taken from: https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_calib3d/py_calibration/py_calibration.html
   refined_mtx, roi = cv.getOptimalNewCameraMatrix(mtx, dist, (img_w, img_h), 0, newImgSize=(img_w, img_h))
-  print_message(f"Calculated refined camera matrix and ROI.\nMTX: {refined_mtx},\nROI: {roi}", isVerbose=True, params=params)
+  print_message(f"Calculated refined camera matrix and ROI.\nMTX: {refined_mtx},\nROI: {roi}", is_verbose=True, params=params)
   
-  print_message("+++Undistorting images...", isVerbose=False)
+  print_message("+++Undistorting images...", is_verbose=False)
   undistorted = []
   idx_undistort = 0
   for i in cvimgs:
     undist = cv.undistort(i, mtx, dist, None, newCameraMatrix=refined_mtx)
-    x,y,w,h = roi
-    undist = undist[y:y+h, x:x+w]
+    #x,y,w,h = roi
+    #undist = undist[y:y+h, x:x+w]
     undistorted.append(undist)
     if (get_param("verbose", params)):
       cv_save(f"undistorted_{idx_undistort}.bmp", undist, params=params)
     idx_undistort += 1
 
+  raise ValueError("TODO")
   # Might have useful stuff: https://www.cc.gatech.edu/classes/AY2016/cs4476_fall/results/proj3/html/cbunch7/index.html
 
   # Here it may be useful to segment the images and then look there for keypoints using a mask
 
-  print_message("+++Undistorting Chessboard points...", isVerbose=False)
+  print_message("+++Undistorting Chessboard points...", is_verbose=False)
   chess_points = [f[1] for f in found]
-  chess_points = [cv.undistortPoints(cp, mtx, dist) for cp in chess_points]
+  chess_points_undistorted = [cv.undistortPoints(cp, mtx, dist) for cp in chess_points] # TODO seems broken
 
   #
-  print_message("+++Extracting feature points from undistorted images...", isVerbose=False)
+  print_message("+++Extracting feature points from undistorted images...", is_verbose=False)
   # Inspired by: https://docs.opencv.org/master/da/df5/tutorial_py_sift_intro.html
   #
   feature_finder = cv.ORB_create(nfeatures=6000)
@@ -190,12 +191,15 @@ def rectify(image_buffers, params=dflt_params):
   #
   # For every pair of images & points, calculate the fundamental matrix (homographies)
   # Taken from: https://docs.opencv.org/master/da/de9/tutorial_py_epipolar_geometry.html
-  print_message("+++Matching feature points between image pairs...", isVerbose=False)
+  print_message("+++Matching feature points between image pairs...", is_verbose=False)
   #
   for pair in itt.combinations(zip(undistorted, feature_results, chess_points, [i for i, n in enumerate(undistorted)]), 2):
-    (left_img, (left_kp, left_des), left_chess_pts, idx_left_match), (right_img, (right_kp, right_des), right_chess_pts, idx_right_match)  = pair
-    print_message(f"Working on images {idx_left_match} and {idx_right_match}...", params=params)
+    (left_img, (left_kp, left_des), left_chess_pts, left_idx), (right_img, (right_kp, right_des), right_chess_pts, right_idx)  = pair
+    print_message(f"Working on images {left_idx} and {right_idx}...", params=params)
 
+    #
+    # FLANN-based Fundamental Matrix
+    #
     FLANN_INDEX_KDTREE = 1 # for SIFT
     FLANN_INDEX_LSH = 6 # for ORB
     index_params = dict(algorithm=FLANN_INDEX_LSH, table_number=6, key_size=12, multi_probe_level=1)
@@ -211,9 +215,6 @@ def rectify(image_buffers, params=dflt_params):
     flann_good = []
     flann_left_pts = []
     flann_right_pts = []
-    raw_left_pts = np.int32([kp.pt for kp in left_kp])
-    raw_right_pts = np.int32([kp.pt for kp in right_kp])
-
     # ratio test as per Lowe's paper: https://www.cs.ubc.ca/~lowe/papers/ijcv04.pdf
     idx_match = 0
     for _, match_tuple in enumerate(knn_matches):
@@ -223,48 +224,71 @@ def rectify(image_buffers, params=dflt_params):
         flann_good.append(m)
         flann_right_pts.append(left_kp[m.trainIdx].pt)
         flann_left_pts.append(right_kp[m.queryIdx].pt)
-    print_message(f"Found {len(flann_good)} good matches between images", params=params)
+    print_message(f"Found {len(flann_good)} good matches between images using FLANN-based matching.", params=params)
 
     flann_left_pts = np.int32(flann_left_pts)
     flann_right_pts = np.int32(flann_right_pts)
-    F, mask = cv.findFundamentalMat(raw_left_pts, raw_right_pts, cv.FM_RANSAC, ransacReprojThreshold=3.0, confidence=0.9999)
-
-    # TODO verify F
-
-    print_message(f"Found Fundamental Matrix F:\n{F}", params=params)
-
-    # TODO TODO TODO TODO TODO
-    # TODO TODO TODO TODO TODO
-    # Remove Flann Based Matcher and just use RANSAC Below. Clean this up!!!
-    # TODO TODO TODO TODO TODO
-    # TODO TODO TODO TODO TODO
-
-
+    flann_F, flann_mask = cv.findFundamentalMat(flann_left_pts, flann_right_pts, cv.FM_RANSAC, ransacReprojThreshold=1.0, confidence=0.9999)
+    # TODO verify flann_F
+    print_message(f"Found Fundamental Matrix flann_F:\n{flann_F}", params=params)
     # Select only inliers
-    #left_pts = left_pts[mask.ravel()==1]
-    #right_pts = right_pts[mask.ravel()==1]
-    #print_message(f"There are {len(left_pts)} inliers for left, {len(right_pts)} inliers for right.", params=params)
+    flann_left_pts = flann_left_pts[flann_mask.ravel()==1]
+    flann_right_pts = flann_right_pts[flann_mask.ravel()==1]
+    print_message(f"There are {len(flann_left_pts)} inliers for left, {len(flann_right_pts)} inliers for right (FLANN matching).", params=params)
+
+    #
+    # Raw-point Fundamental Matrix
+    #
+    raw_left_pts = np.int32([kp.pt for kp in left_kp])
+    raw_right_pts = np.int32([kp.pt for kp in right_kp])
+    F, mask = cv.findFundamentalMat(raw_left_pts, raw_right_pts, cv.FM_RANSAC, ransacReprojThreshold=1.0, confidence=0.9999)
+    # TODO verify F
+    print_message(f"Found Fundamental Matrix F:\n{F}", params=params)
+    # Select only inliers
+    raw_left_pts = raw_left_pts[mask.ravel()==1]
+    raw_right_pts = raw_right_pts[mask.ravel()==1]
+    print_message(f"There are {len(raw_left_pts)} inliers for left, {len(raw_right_pts)} inliers for right (RANSAC matching w/ Raw Pts).", params=params)
+
+    #
+    # Chessboard-point Fundamental Matrix
+    #
+    left_chess_pts = np.int32(left_chess_pts)
+    right_chess_pts = np.int32(right_chess_pts)
+    if (len(left_chess_pts) < 8 or len(right_chess_pts) < 8):
+      raise ValueError("Unable to run 8-point algorithm using chessboard points")
+    chess_F, chess_mask = cv.findFundamentalMat(left_chess_pts, right_chess_pts, cv.FM_8POINT)
+    # TODO verify chess_F
+    print_message(f"Found Fundamental Matrix chess_F:\n{chess_F}", params=params)
+    # Select only inliers
+    left_chess_pts = left_chess_pts[chess_mask.ravel()==1]
+    right_chess_pts = right_chess_pts[chess_mask.ravel()==1]
+    print_message(f"There are {len(left_chess_pts)} inliers for left, {len(right_chess_pts)} inliers for right (8-Point matching Chessboard).", params=params)
+
+    #
+    #
+    # Compute Epipolar lines using the Fundamental Matrix
+    #
+    #
 
     # Find epilines corresponding to points in right image (second image) and
     # drawing its lines on left image
-    lines1 = cv.computeCorrespondEpilines(flann_right_pts.reshape(-1,1,2), 2,F)
+    lines1 = cv.computeCorrespondEpilines(raw_right_pts.reshape(-1,1,2), 2, chess_F)
     lines1 = lines1.reshape(-1,3)
     print_message(f"Computed Epilines lines1:\n{lines1}", params=params)
     # Find epilines corresponding to points in left image (first image) and
     # drawing its lines on right image
-    lines2 = cv.computeCorrespondEpilines(flann_left_pts.reshape(-1,1,2), 1,F)
+    lines2 = cv.computeCorrespondEpilines(raw_left_pts.reshape(-1,1,2), 1, chess_F)
     lines2 = lines2.reshape(-1,3)
     print_message(f"Computed Epilines lines2:\n{lines2}", params=params)
 
     if (get_param("verbose", params)):
-      left_lines, _  = cv_drawlines(left_img,right_img,lines1,flann_left_pts,flann_right_pts)
-      right_lines, _ = cv_drawlines(right_img,left_img,lines2,flann_right_pts,flann_left_pts)
-      cv_save(f"epilines_{idx_left_match}_{idx_right_match}.bmp", left_lines, params=params)
-      cv_save(f"epilines_{idx_right_match}_{idx_left_match}.bmp", right_lines, params=params)
-
+      left_lines, _  = cv_drawlines(left_img,right_img,lines1,raw_left_pts,raw_right_pts)
+      right_lines, _ = cv_drawlines(right_img,left_img,lines2,raw_right_pts,raw_left_pts)
+      cv_save(f"epilines_{left_idx}_{right_idx}.bmp", left_lines, params=params)
+      cv_save(f"epilines_{right_idx}_{left_idx}.bmp", right_lines, params=params)
 
     # No threshold because we selected only inliers, above
-    rv, H1, H2 = cv.stereoRectifyUncalibrated(flann_left_pts, flann_right_pts, F, (img_w, img_h), threshold=0.0)
+    rv, H1, H2 = cv.stereoRectifyUncalibrated(raw_left_pts, raw_right_pts, chess_F, (img_w, img_h), threshold=0.0)
     if rv is not True:
       raise ValueError("Failed to rectify images.")
     print_message(f"Calculated Homography Matrices:\nH1: {H1}\nH2: {H2}", params=params)
@@ -281,10 +305,10 @@ def rectify(image_buffers, params=dflt_params):
     if (get_param("verbose", params)):
       left_remap = cv.remap(left_img, map1_1, map1_2, cv.INTER_LANCZOS4)
       right_remap = cv.remap(right_img, map2_1, map2_2, cv.INTER_LANCZOS4)
-      cv_save(f"remap_{idx_left_match}_{idx_right_match}.bmp", left_remap, params=params)
-      cv_save(f"remap_{idx_right_match}_{idx_left_match}.bmp", right_remap, params=params)
+      cv_save(f"remap_{left_idx}_{right_idx}.bmp", left_remap, params=params)
+      cv_save(f"remap_{right_idx}_{left_idx}.bmp", right_remap, params=params)
 
-    # print_message("+++Attempting to resolve epilines with Chessboard points...", isVerbose=False)
+    # print_message("+++Attempting to resolve epilines with Chessboard points...", is_verbose=False)
     # #left_chess_pts = np.int32(left_chess_pts)
     # #right_chess_pts = np.int32(right_chess_pts)
     # chess_F, chess_mask = cv.findFundamentalMat(left_chess_pts, right_chess_pts, cv.FM_8POINT)
