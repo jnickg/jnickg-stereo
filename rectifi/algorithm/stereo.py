@@ -101,7 +101,7 @@ def rectify(image_buffers, params=dflt_params):
   if not all ((f is True) for f, _ in [cv.findChessboardCorners(i, chessboard_size, flags=cv.CALIB_CB_FAST_CHECK) for i in cvimgs]):
     print_message("WARNING: Quick check could not find chessboard patterns in all images. Image quality may be an issue", params=params)
   print_message("Image contents OK", params=params)
-  
+
   time.sleep(1.0)
 
   #
