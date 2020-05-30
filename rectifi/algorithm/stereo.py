@@ -100,7 +100,6 @@ def rectify(image_buffers, params=dflt_params):
   print_message(f"Image sizes OK: {img_w}x{img_h}", params=params)
   if not all ((f is True) for f, _ in [cv.findChessboardCorners(i, chessboard_size, flags=cv.CALIB_CB_FAST_CHECK) for i in cvimgs]):
     print_message("WARNING: Quick check could not find chessboard patterns in all images. Image quality may be an issue", params=params)
-    #raise ValueError("Not all images have chessboard patterns")
   print_message("Image contents OK", params=params)
   
   time.sleep(1.0)
@@ -141,32 +140,31 @@ def rectify(image_buffers, params=dflt_params):
     pt_refined = cv.cornerSubPix(i, pt, (11, 11), (-1, -1), get_param("criteria", params))
     imgpoints.append(pt_refined)
 
-  rms, mtx, dist, rvecs, tvecs = cv.calibrateCamera(objpoints, imgpoints, i.shape[::-1], None, None)
-  print_message(f"Successfully calibrated!\nrms: {rms}\nmtx:\n{mtx}\ndist:\n{dist}\nrvecs:\n{rvecs}\ntvecs:\n{tvecs}", is_verbose=True, params=params)
+  calib_error_rms, intrinsic_matrix, distortion_coeffs, rotation_vecs, translation_vecs = cv.calibrateCamera(objpoints, imgpoints, i.shape[::-1], None, None, rvecs=None, tvecs=None, flags=(cv.CALIB_ZERO_TANGENT_DIST | cv.CALIB_FIX_PRINCIPAL_POINT))
+  print_message(f"Successfully calibrated!\nrms: {calib_error_rms}\nmtx:\n{intrinsic_matrix}\ndist:\n{distortion_coeffs}\nrvecs:\n{rotation_vecs}\ntvecs:\n{translation_vecs}", is_verbose=True, params=params)
   # Taken from: https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_calib3d/py_calibration/py_calibration.html
-  refined_mtx, roi = cv.getOptimalNewCameraMatrix(mtx, dist, (img_w, img_h), 0, newImgSize=(img_w, img_h))
+  refined_mtx, roi = cv.getOptimalNewCameraMatrix(intrinsic_matrix, distortion_coeffs, (img_w, img_h), 0, newImgSize=(img_w, img_h))
   print_message(f"Calculated refined camera matrix and ROI.\nMTX: {refined_mtx},\nROI: {roi}", is_verbose=True, params=params)
   
   print_message("+++Undistorting images...", is_verbose=False)
   undistorted = []
   idx_undistort = 0
   for i in cvimgs:
-    undist = cv.undistort(i, mtx, dist, None, newCameraMatrix=refined_mtx)
-    #x,y,w,h = roi
-    #undist = undist[y:y+h, x:x+w]
+    undist = cv.undistort(i, intrinsic_matrix, distortion_coeffs, None, newCameraMatrix=refined_mtx)
+    x,y,w,h = roi
+    undist = undist[y:y+h, x:x+w]
     undistorted.append(undist)
     if (get_param("verbose", params)):
       cv_save(f"undistorted_{idx_undistort}.bmp", undist, params=params)
     idx_undistort += 1
 
-  raise ValueError("TODO")
   # Might have useful stuff: https://www.cc.gatech.edu/classes/AY2016/cs4476_fall/results/proj3/html/cbunch7/index.html
 
   # Here it may be useful to segment the images and then look there for keypoints using a mask
 
   print_message("+++Undistorting Chessboard points...", is_verbose=False)
   chess_points = [f[1] for f in found]
-  chess_points_undistorted = [cv.undistortPoints(cp, mtx, dist) for cp in chess_points] # TODO seems broken
+  chess_points_undistorted = [cv.undistortPoints(cp, intrinsic_matrix, distortion_coeffs) for cp in chess_points] # TODO seems broken
 
   #
   print_message("+++Extracting feature points from undistorted images...", is_verbose=False)
@@ -295,11 +293,11 @@ def rectify(image_buffers, params=dflt_params):
 
     # See last comment in https://docs.opencv.org/2.4/modules/imgproc/doc/geometric_transformations.html#initundistortrectifymap
     # Also slide 25: http://ece631web.groups.et.byu.net/Lectures/ECEn631%2014%20-%20Calibration%20and%20Rectification.pdf
-    R1 = np.linalg.inv(mtx).dot(H1).dot(mtx)
-    map1_1, map1_2 = cv.initUndistortRectifyMap(mtx, dist, R1, refined_mtx, (img_w, img_h), cv.CV_32FC1)
+    R1 = np.linalg.inv(intrinsic_matrix).dot(H1).dot(intrinsic_matrix)
+    map1_1, map1_2 = cv.initUndistortRectifyMap(intrinsic_matrix, distortion_coeffs, R1, refined_mtx, (img_w, img_h), cv.CV_32FC1)
     print_message(f"Rectify maps:\nmap1_1: {map1_1}\nmat1_2: {map1_2} ", params=params)
-    R2 = np.linalg.inv(mtx).dot(H2).dot(mtx)
-    map2_1, map2_2 = cv.initUndistortRectifyMap(mtx, dist, R2, refined_mtx, (img_w, img_h), cv.CV_32FC1)
+    R2 = np.linalg.inv(intrinsic_matrix).dot(H2).dot(intrinsic_matrix)
+    map2_1, map2_2 = cv.initUndistortRectifyMap(intrinsic_matrix, distortion_coeffs, R2, refined_mtx, (img_w, img_h), cv.CV_32FC1)
     print_message(f"Rectify maps:\nmap2_1: {map2_1}\nmat2_2: {map2_2} ", params=params)
 
     if (get_param("verbose", params)):
