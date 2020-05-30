@@ -48,7 +48,7 @@ def cv_drawlines(img1,img2,lines,pts1,pts2):
         x0,y0 = map(int, [0, -r[2]/r[1] ])
         x1,y1 = map(int, [c, -(r[2]+r[0]*c)/r[1] ])
         img1 = cv.line(img1, (x0,y0), (x1,y1), color,1)
-        print(f"pt1: {pt1}")
+        #print(f"pt1: {pt1}")
         img1 = cv.circle(img1,tuple(pt1),5,color,-1)
         img2 = cv.circle(img2,tuple(pt2),5,color,-1)
     return img1,img2
@@ -192,10 +192,9 @@ def rectify(image_buffers, params=dflt_params):
   # Taken from: https://docs.opencv.org/master/da/de9/tutorial_py_epipolar_geometry.html
   print_message("+++Matching feature points between image pairs...", isVerbose=False)
   #
-  idx_left_match = 0
-  idx_right_match = 1
-  for pair in itt.combinations(zip(undistorted, feature_results, chess_points), 2):
-    (left_img, (left_kp, left_des), left_chess_pts), (right_img, (right_kp, right_des), right_chess_pts)  = pair
+  for pair in itt.combinations(zip(undistorted, feature_results, chess_points, [i for i, n in enumerate(undistorted)]), 2):
+    (left_img, (left_kp, left_des), left_chess_pts, idx_left_match), (right_img, (right_kp, right_des), right_chess_pts, idx_right_match)  = pair
+    print_message(f"Working on images {idx_left_match} and {idx_right_match}...", params=params)
 
     FLANN_INDEX_KDTREE = 1 # for SIFT
     FLANN_INDEX_LSH = 6 # for ORB
@@ -209,9 +208,11 @@ def rectify(image_buffers, params=dflt_params):
     knn_matches = [match for match in knn_matches if len(match) == 2]
     print_message(f"Kept {len(knn_matches)} matches after removing non-pairs.", params=params)
 
-    good = []
-    left_pts = []
-    right_pts = []
+    flann_good = []
+    flann_left_pts = []
+    flann_right_pts = []
+    raw_left_pts = np.int32([kp.pt for kp in left_kp])
+    raw_right_pts = np.int32([kp.pt for kp in right_kp])
 
     # ratio test as per Lowe's paper: https://www.cs.ubc.ca/~lowe/papers/ijcv04.pdf
     idx_match = 0
@@ -219,14 +220,17 @@ def rectify(image_buffers, params=dflt_params):
       idx_match += 1
       m, n = match_tuple
       if m.distance < 0.8 * n.distance:
-        good.append(m)
-        right_pts.append(left_kp[m.trainIdx].pt)
-        left_pts.append(right_kp[m.queryIdx].pt)
-    print_message(f"Found {len(good)} good matches between images", params=params)
+        flann_good.append(m)
+        flann_right_pts.append(left_kp[m.trainIdx].pt)
+        flann_left_pts.append(right_kp[m.queryIdx].pt)
+    print_message(f"Found {len(flann_good)} good matches between images", params=params)
 
-    left_pts = np.int32(left_pts)
-    right_pts = np.int32(right_pts)
-    F, mask = cv.findFundamentalMat(np.int32([kp.pt for kp in left_kp]), np.int32([kp.pt for kp in right_kp]), cv.FM_RANSAC, ransacReprojThreshold=1.0, confidence=0.9999)
+    flann_left_pts = np.int32(flann_left_pts)
+    flann_right_pts = np.int32(flann_right_pts)
+    F, mask = cv.findFundamentalMat(raw_left_pts, raw_right_pts, cv.FM_RANSAC, ransacReprojThreshold=3.0, confidence=0.9999)
+
+    # TODO verify F
+
     print_message(f"Found Fundamental Matrix F:\n{F}", params=params)
 
     # TODO TODO TODO TODO TODO
@@ -243,24 +247,24 @@ def rectify(image_buffers, params=dflt_params):
 
     # Find epilines corresponding to points in right image (second image) and
     # drawing its lines on left image
-    lines1 = cv.computeCorrespondEpilines(right_pts.reshape(-1,1,2), 2,F)
+    lines1 = cv.computeCorrespondEpilines(flann_right_pts.reshape(-1,1,2), 2,F)
     lines1 = lines1.reshape(-1,3)
     print_message(f"Computed Epilines lines1:\n{lines1}", params=params)
     # Find epilines corresponding to points in left image (first image) and
     # drawing its lines on right image
-    lines2 = cv.computeCorrespondEpilines(left_pts.reshape(-1,1,2), 1,F)
+    lines2 = cv.computeCorrespondEpilines(flann_left_pts.reshape(-1,1,2), 1,F)
     lines2 = lines2.reshape(-1,3)
     print_message(f"Computed Epilines lines2:\n{lines2}", params=params)
 
     if (get_param("verbose", params)):
-      left_lines, _  = cv_drawlines(left_img,right_img,lines1,left_pts,right_pts)
-      right_lines, _ = cv_drawlines(right_img,left_img,lines2,right_pts,left_pts)
+      left_lines, _  = cv_drawlines(left_img,right_img,lines1,flann_left_pts,flann_right_pts)
+      right_lines, _ = cv_drawlines(right_img,left_img,lines2,flann_right_pts,flann_left_pts)
       cv_save(f"epilines_{idx_left_match}_{idx_right_match}.bmp", left_lines, params=params)
       cv_save(f"epilines_{idx_right_match}_{idx_left_match}.bmp", right_lines, params=params)
 
 
     # No threshold because we selected only inliers, above
-    rv, H1, H2 = cv.stereoRectifyUncalibrated(left_pts, right_pts, F, (img_w, img_h), threshold=0.0)
+    rv, H1, H2 = cv.stereoRectifyUncalibrated(flann_left_pts, flann_right_pts, F, (img_w, img_h), threshold=0.0)
     if rv is not True:
       raise ValueError("Failed to rectify images.")
     print_message(f"Calculated Homography Matrices:\nH1: {H1}\nH2: {H2}", params=params)
@@ -320,8 +324,8 @@ def rectify(image_buffers, params=dflt_params):
     #   cv_save(f"chess_remap_{idx_left_match}_{idx_right_match}.bmp", chess_left_remap, params=params)
     #   cv_save(f"chess_remap_{idx_right_match}_{idx_left_match}.bmp", chess_right_remap, params=params)
 
-    idx_left_match += 1
-    idx_right_match += 1
+    #idx_left_match += 1
+    #idx_right_match += 1
 
 
   #
