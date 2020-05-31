@@ -7,7 +7,7 @@ import itertools as itt
 
 dflt_params = {
   "fmt":".bmp",
-  "verbose": True,
+  "debug": False,
   "chess_sz":(6,9),
   "chess_col":6,
   "chess_row":9,
@@ -22,9 +22,10 @@ dflt_params = {
 def get_param(key, params):
   return params.get(key, dflt_params.get(key, None))
 
-def print_message(message, is_verbose=True, params=dflt_params, do_newline=True):
+def print_message(message, is_verbose=True, is_debug=False, params=dflt_params, do_newline=True):
   do_verbose = get_param("verbose", params)
-  if (is_verbose is False or do_verbose is True):
+  do_debug = get_param("debug", params)
+  if ((is_verbose is False or do_verbose is True) and (is_debug is False or do_debug is True)):
     if (do_newline is True):
       print(f"\n\n{message}")
     else:
@@ -76,8 +77,8 @@ def do_epilines(F, left_img, left_idx, left_pts, right_img, right_idx, right_pts
   if (get_param("verbose", p)):
     left_lines, _  = cv_drawlines(left_img,right_img,lines1,left_pts,right_pts)
     right_lines, _ = cv_drawlines(right_img,left_img,lines2,right_pts,left_pts)
-    cv_save(f"{prefix}_{left_idx}_{right_idx}.bmp", left_lines, params=p)
-    cv_save(f"{prefix}_{right_idx}_{left_idx}.bmp", right_lines, params=p)
+    cv_save(f"{prefix}_{left_idx}-{right_idx}.bmp", left_lines, params=p)
+    cv_save(f"{prefix}_{right_idx}-{left_idx}.bmp", right_lines, params=p)
 
 def do_rectification(intrinsic_matrix,
                      distortion_coeffs,
@@ -276,6 +277,7 @@ def rectify(image_buffers, params=dflt_params):
   # Below we use undistorted, NOT cvimgs_subject, because of the note in under:
   # https://docs.opencv.org/2.4/modules/calib3d/doc/camera_calibration_and_3d_reconstruction.html#stereorectifyuncalibrated
   #
+  iterator = 0
   for pair in itt.combinations(zip(undistorted, feature_results, [i for i, n in enumerate(undistorted)]), 2):
     (left_img, (left_kp, left_des), left_idx), (right_img, (right_kp, right_des), right_idx)  = pair
     print_message(f"Working on images {left_idx} and {right_idx}...", params=params)
@@ -310,7 +312,7 @@ def rectify(image_buffers, params=dflt_params):
         flann_left_pts.append(right_kp[m.queryIdx].pt)
     good_printable = [(left_kp[m.trainIdx].pt, right_kp[m.queryIdx].pt) for m in flann_good]
     print_message(f"Found {len(flann_good)} good matches between images using FLANN-based matching.", params=params, is_verbose=False)
-    print_message(f"Good matches:\n{good_printable}", params=params)
+    print_message(f"Good matches:\n{good_printable}", params=params, is_debug=True)
 
     flann_left_pts = np.int32(flann_left_pts)
     flann_right_pts = np.int32(flann_right_pts)
@@ -337,7 +339,7 @@ def rectify(image_buffers, params=dflt_params):
     #
     # Manually-entered Fundamental Matrix
     #
-    if (get_param("verbose", params) is True and ((left_idx == 1 and right_idx == 2) or (left_idx == 2 and right_idx == 1))):
+    if (get_param("debug", params) is True and ((left_idx == 1 and right_idx == 2) or (left_idx == 2 and right_idx == 1))):
       manual_left_pts = [(333,377),(339,343),(765,234),(784,269),(995,83),(248,247),(54,23),(483,470),(596,199)]
       manual_right_pts = [(393,375),(398,340),(807,209),(823,239),(952,73),(277,49),(10,28),(560,447),(661,184)]
       manual_left_pts = np.int32(manual_left_pts)
@@ -377,7 +379,7 @@ def rectify(image_buffers, params=dflt_params):
     do_epilines(rectify_F,
                 left_img, left_idx, rectify_input_pts_left,
                 right_img, right_idx, rectify_input_pts_right,
-                prefix="epilines", p=params)
+                prefix=f"epilines_pair{iterator}", p=params)
 
     do_rectification(intrinsic_matrix,
                      distortion_coeffs,
@@ -386,28 +388,8 @@ def rectify(image_buffers, params=dflt_params):
                      (img_w_new, img_h_new),
                      left_img, left_idx, rectify_input_pts_left,
                      right_img, right_idx, rectify_input_pts_right,
-                     prefix="remap", p=params)
-
-
-  #
-  # Calibrate between the images
-  # See 723
-  #
-  #cv.stereoCalibrate
-
-  #
-  # If we succeeded in calibrating, proceed with calibrated rectification
-  # See 732
-  #
-  #cv.initUndistortRectifyMap
-  #cv.stereoRectify
-
-  #
-  # If we failed in calibrating (e.g. failed to find chessboards), try
-  # uncalibrated rectification.
-  # See 729
-  #
-  #cv.stereoRectifyUncalibrated
+                     prefix=f"remap_pair{iterator}", p=params)
+    iterator += 1
 
   raise ValueError("HIT END OF TEST IMPLEMENTATION")
   return output
