@@ -7,7 +7,7 @@ import itertools as itt
 
 dflt_params = {
   "fmt":".bmp",
-  "debug": False,
+  "debug": True,
   "chess_sz":(6,9),
   "chess_col":6,
   "chess_row":9,
@@ -293,18 +293,24 @@ def rectify(image_buffers, params=dflt_params):
 
     # https://docs.opencv.org/2.4/doc/tutorials/features2d/feature_flann_matcher/feature_flann_matcher.html
     matcher = cv.FlannBasedMatcher(index_params, search_params)
-    knn_matches = matcher.knnMatch(left_des, right_des, k=2)
-    print_message(f"Matcher found {len(knn_matches)} matches.", params=params)
-    knn_matches = [match for match in knn_matches if len(match) == 2]
-    print_message(f"Kept {len(knn_matches)} matches after removing non-pairs.", params=params)
+    matches = matcher.match(left_des, right_des)
+    print_message(f"Matcher found {len(matches)} matches.", params=params)
+    #print_message(f"Matches:\n{knn_matches}.", params=params, is_debug=True)
+    match_distances = [m.distance for m in matches]
+
+    print_message('distance: min: %.3f' % min(match_distances), params=params)
+    print_message('distance: mean: %.3f' % (sum(match_distances) / len(match_distances)), params=params)
+    print_message('distance: max: %.3f' % max(match_distances), params=params)
 
     flann_good = []
     flann_left_pts = []
     flann_right_pts = []
+
+    matches = matcher.radiusMatch(left_des, right_des, 0.2)
+    # TODO filter these matches for right number, turn them into epilines
+
     # ratio test as per Lowe's paper: https://www.cs.ubc.ca/~lowe/papers/ijcv04.pdf
-    idx_match = 0
-    for _, match_tuple in enumerate(knn_matches):
-      idx_match += 1
+    for idx_match, match_tuple in enumerate(matches):
       m, n = match_tuple
       if m.distance < 0.8 * n.distance:
         flann_good.append(m)
