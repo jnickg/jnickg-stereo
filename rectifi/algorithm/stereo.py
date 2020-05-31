@@ -60,7 +60,41 @@ def sharpen_image(image, sharpen_thresh, p=dflt_params):
     b = cv.Laplacian(image, cv.CV_64F).var()
     kernel = np.array([[-0.5,-0.5,-0.5], [-0.5,5,-0.5], [-0.5,-0.5,-0.5]])
     image = cv.filter2D(image, -1, kernel)
-  return image 
+  return image
+
+def do_kp_correspondence(left_kp, left_des, right_kp, right_des, kp_type='SIFT', params=dflt_params):
+    search_params = dict(checks=50)
+
+    index_params = None
+    if kp_type == 'SIFT':
+      FLANN_INDEX_KDTREE = 1 # for SIFT
+      index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=16)
+    elif kp_type == 'ORB':
+      FLANN_INDEX_LSH = 6 # for ORB
+      index_params = dict(algorithm=FLANN_INDEX_LSH, table_number=6, key_size=12, multi_probe_level=1)
+
+    # https://docs.opencv.org/2.4/doc/tutorials/features2d/feature_flann_matcher/feature_flann_matcher.html
+    matcher = cv.FlannBasedMatcher(index_params, search_params)
+    matches = matcher.match(left_des, right_des)
+    print_message(f"Matcher found {len(matches)} matches.", params=params)
+    match_distances = [m.distance for m in matches]
+
+    print_message('Match distance: min: %.3f' % min(match_distances), params=params)
+    print_message('Match distance: mean: %.3f' % (sum(match_distances) / len(match_distances)), params=params)
+    print_message('Match distance: max: %.3f' % max(match_distances), params=params)
+
+    flann_good = []
+    flann_left_pts = []
+    flann_right_pts = []
+
+    flann_good = matcher.radiusMatch(left_des, right_des, max(2 * min(match_distances), 0.02))
+    flann_good_printable = [(left_kp[m[0].queryIdx].pt, right_kp[m[0].trainIdx].pt) for m in flann_good if len(m) > 0]
+    print_message(f"Found {len(flann_good_printable)} good matches between images using FLANN-based RADIUS matching.", params=params, is_verbose=False)
+    print_message(f"Good matches:\n{flann_good_printable}", params=params, is_debug=True)
+    flann_left_pts = [left_kp[m[0].queryIdx].pt for m in flann_good if len(m) > 0]
+    flann_right_pts = [right_kp[m[0].trainIdx].pt for m in flann_good if len(m) > 0]
+
+    return flann_left_pts, flann_right_pts
 
 def do_epilines(F, left_img, left_idx, left_pts, right_img, right_idx, right_pts, prefix='epilines', p=dflt_params):
   # Find epilines corresponding to points in right image (second image) and
@@ -90,7 +124,11 @@ def do_rectification(intrinsic_matrix,
                      prefix="remap", p=dflt_params):
     img_w, img_h = size
     # No threshold because we selected only inliers, above
-    cal_success, H1, H2 = cv.stereoRectifyUncalibrated(left_pts, right_pts, rectify_F, (img_w, img_h), threshold=3.0)
+    cal_success, H1, H2 = cv.stereoRectifyUncalibrated(left_pts,
+                                                       right_pts,
+                                                       rectify_F,
+                                                       (img_w, img_h),
+                                                       threshold=3.0)
     if cal_success is not True:
       raise ValueError("Failed to rectify images.")
     print_message(f"Calculated Homography Matrices:\nH1: {H1}\nH2: {H2}", params=p)
@@ -100,8 +138,19 @@ def do_rectification(intrinsic_matrix,
     R1 = np.linalg.inv(intrinsic_matrix).dot(H1).dot(intrinsic_matrix)
     R2 = np.linalg.inv(intrinsic_matrix).dot(H2).dot(intrinsic_matrix)
     print_message(f"R Matrices for undistort mappings\nR1: {R1}\nR2: {R2}")
-    map1_1, map1_2 = cv.initUndistortRectifyMap(intrinsic_matrix, distortion_coeffs, R1, refined_mtx, (img_w, img_h), cv.CV_32FC1)
-    map2_1, map2_2 = cv.initUndistortRectifyMap(intrinsic_matrix, distortion_coeffs, R2, refined_mtx, (img_w, img_h), cv.CV_32FC1)
+
+    map1_1, map1_2 = cv.initUndistortRectifyMap(intrinsic_matrix,
+                                                distortion_coeffs,
+                                                R1,
+                                                refined_mtx,
+                                                (img_w, img_h),
+                                                cv.CV_32FC1)
+    map2_1, map2_2 = cv.initUndistortRectifyMap(intrinsic_matrix,
+                                                distortion_coeffs,
+                                                R2,
+                                                refined_mtx,
+                                                (img_w, img_h),
+                                                cv.CV_32FC1)
 
     print_message(f"Rectify maps:\nmap1_1: {map1_1}\nmat1_2: {map1_2} ", params=p)
     print_message(f"Rectify maps:\nmap2_1: {map2_1}\nmat2_2: {map2_2} ", params=p)
@@ -109,8 +158,8 @@ def do_rectification(intrinsic_matrix,
     if (get_param("verbose", p)):
       left_remap = cv.remap(left_img, map1_1, map1_2, cv.INTER_LANCZOS4)
       right_remap = cv.remap(right_img, map2_1, map2_2, cv.INTER_LANCZOS4)
-      cv_save(f"{prefix}_{left_idx}_{right_idx}.bmp", left_remap, params=p)
-      cv_save(f"{prefix}_{right_idx}_{left_idx}.bmp", right_remap, params=p)
+      cv_save(f"{prefix}_{left_idx}-{right_idx}.bmp", left_remap, params=p)
+      cv_save(f"{prefix}_{right_idx}-{left_idx}.bmp", right_remap, params=p)
 
 def rectify(image_buffers, params=dflt_params):
   """Rectifies the given images
@@ -124,7 +173,6 @@ def rectify(image_buffers, params=dflt_params):
   """
   output = {}
   chessboard_size = get_param("chess_sz", params)
-
 
   #
   print_message("+++Reading input images, decoding to processing format...", is_verbose=False)
@@ -184,7 +232,7 @@ def rectify(image_buffers, params=dflt_params):
   #
   found = [cv.findChessboardCorners(i, chessboard_size) for i in cvimgs_chessboard]
   if not all (f[0] is True for f in found):
-    raise ValueError("Unable to find calibration points for all images.")
+    raise ValueError("Unable to find calibration points for all calibration images.")
   if (get_param("verbose", params)):
     idx_chess = 0
     for img, f in zip(cvimgs_chessboard, found):
@@ -205,20 +253,41 @@ def rectify(image_buffers, params=dflt_params):
   objP[:,:2] = np.mgrid[0:get_param("chess_col", params), 0:get_param("chess_row", params)].T.reshape(-1, 2)
   objpoints = []
   imgpoints = []
-  # Here we assume all images had a chessboard found, which may not always be true if we change validation above
+  # Here we assume all calibration images had a chessboard found, which may not always be true if we
+  # change validation above
   for i, pt in zip(cvimgs_chessboard, [f[1] for f in found]):
     objpoints.append(objP)
     pt_refined = cv.cornerSubPix(i, pt, (11, 11), (-1, -1), get_param("criteria", params))
     imgpoints.append(pt_refined)
 
-  calib_error_rms, intrinsic_matrix, distortion_coeffs, rotation_vecs, translation_vecs = cv.calibrateCamera(objpoints, imgpoints, i.shape[::-1], None, None, rvecs=None, tvecs=None, flags=(cv.CALIB_ZERO_TANGENT_DIST | cv.CALIB_FIX_PRINCIPAL_POINT))
-  print_message(f"Successfully calibrated!\nrms: {calib_error_rms}\nmtx:\n{intrinsic_matrix}\ndist:\n{distortion_coeffs}\nrvecs:\n{rotation_vecs}\ntvecs:\n{translation_vecs}", is_verbose=True, params=params)
+  calibrate_output = cv.calibrateCamera(objpoints,
+                                        imgpoints,
+                                        i.shape[::-1],
+                                        None,
+                                        None,
+                                        rvecs=None,
+                                        tvecs=None,
+                                        flags=(cv.CALIB_ZERO_TANGENT_DIST | cv.CALIB_FIX_PRINCIPAL_POINT))
+  calib_error_rms, intrinsic_matrix, distortion_coeffs, rotation_vecs, translation_vecs = calibrate_output
+  print_message(f"Successfully calibrated!\n"
+                f"rms: {calib_error_rms}\n"
+                f"mtx:\n{intrinsic_matrix}\n"
+                f"dist:\n{distortion_coeffs}\n"
+                f"rvecs:\n{rotation_vecs}\n"
+                f"tvecs:\n{translation_vecs}",
+                is_verbose=True, params=params)
   # Taken from: https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_calib3d/py_calibration/py_calibration.html
-  refined_mtx, roi = cv.getOptimalNewCameraMatrix(intrinsic_matrix, distortion_coeffs, (img_w, img_h), 0, newImgSize=(img_w, img_h))
+  refined_mtx, roi = cv.getOptimalNewCameraMatrix(intrinsic_matrix,
+                                                  distortion_coeffs,
+                                                  (img_w, img_h),
+                                                  0,
+                                                  newImgSize=(img_w, img_h))
   img_orig_x_new, img_orig_y_new, img_w_new, img_h_new = roi
   print_message(f"Calculated refined camera matrix and ROI.\nMTX: {refined_mtx},\nROI: {roi}", is_verbose=True, params=params)
   
+  #
   print_message("+++Undistorting images...", is_verbose=False)
+  #
   undistorted = []
   idx_undistort = 0
   for i in cvimgs_subject:
@@ -231,30 +300,13 @@ def rectify(image_buffers, params=dflt_params):
     idx_undistort += 1
 
   #
-  # Equalize undistorted images
-  #
-  # undistorted = [cv.equalizeHist(i) for i in undistorted]
-  # for i, idx in zip(undistorted, [i for i, _ in enumerate(undistorted)]):
-  #   cv_save(f"equalized_{idx}.bmp", i, params=params)
-
-
-  #
-  # Sharpen undistorted images
-  #
-  # undistorted = [sharpen_image(i, 700.0) for i in undistorted]
-  # blurrinesses = [cv.Laplacian(i, cv.CV_64F).var() for i in undistorted]
-  # print_message(f"Image blurriness: {blurrinesses}")
-  # for i, idx in zip(undistorted, [i for i, _ in enumerate(undistorted)]):
-  #   cv_save(f"undistorted_sharpened_{idx}.bmp", i, params=params)
-
-  # Might have useful stuff: https://www.cc.gatech.edu/classes/AY2016/cs4476_fall/results/proj3/html/cbunch7/index.html
-
-  #
   print_message("+++Extracting feature points from undistorted images...", is_verbose=False)
   # Inspired by: https://docs.opencv.org/master/da/df5/tutorial_py_sift_intro.html
   #
-  #feature_finder = cv.ORB_create(nfeatures=3000,nlevels=12,scaleFactor=1.1, patchSize=20)
-  feature_finder = cv.xfeatures2d.SIFT_create(nfeatures=900)
+  feature_finder = cv.xfeatures2d.SIFT_create(nfeatures=5000,
+                                              contrastThreshold=0.04,
+                                              edgeThreshold=25,
+                                              sigma=1.6)
   feature_results = []
   for i in undistorted:
     kp = feature_finder.detect(i, None)
@@ -273,129 +325,51 @@ def rectify(image_buffers, params=dflt_params):
   #
   # For every pair of images & points, calculate the fundamental matrix (homographies)
   # Taken from: https://docs.opencv.org/master/da/de9/tutorial_py_epipolar_geometry.html
-  print_message("+++Matching feature points between image pairs...", is_verbose=False)
+  print_message("+++Matching feature points between image pairs, then attempting rectification...", is_verbose=False)
   # Below we use undistorted, NOT cvimgs_subject, because of the note in under:
   # https://docs.opencv.org/2.4/modules/calib3d/doc/camera_calibration_and_3d_reconstruction.html#stereorectifyuncalibrated
   #
-  iterator = 0
+  pair_counter = 0
   for pair in itt.combinations(zip(undistorted, feature_results, [i for i, n in enumerate(undistorted)]), 2):
     (left_img, (left_kp, left_des), left_idx), (right_img, (right_kp, right_des), right_idx)  = pair
     print_message(f"Working on images {left_idx} and {right_idx}...", params=params)
 
-    #
-    # FLANN-based Fundamental Matrix
-    #
-    FLANN_INDEX_KDTREE = 1 # for SIFT
-    index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
-    FLANN_INDEX_LSH = 6 # for ORB
-    #index_params = dict(algorithm=FLANN_INDEX_LSH, table_number=6, key_size=12, multi_probe_level=1)
-    search_params = dict(checks=50)
+    left_matches, right_matches = do_kp_correspondence(left_kp,
+                                                      left_des,
+                                                      right_kp,
+                                                      right_des,
+                                                      kp_type='SIFT',
+                                                      params=params)
 
-    # https://docs.opencv.org/2.4/doc/tutorials/features2d/feature_flann_matcher/feature_flann_matcher.html
-    matcher = cv.FlannBasedMatcher(index_params, search_params)
-    matches = matcher.match(left_des, right_des)
-    print_message(f"Matcher found {len(matches)} matches.", params=params)
-    #print_message(f"Matches:\n{knn_matches}.", params=params, is_debug=True)
-    match_distances = [m.distance for m in matches]
+    left_matches = np.int32(left_matches)
+    right_matches = np.int32(right_matches)
+    fundamental_mtx, inlier_mask = cv.findFundamentalMat(left_matches,
+                                                         right_matches,
+                                                         method=cv.FM_RANSAC,
+                                                         ransacReprojThreshold=1.0,
+                                                         confidence=0.9999)
+    print_message(f"Found Fundamental Matrix flann_F:\n{fundamental_mtx}", params=params)
 
-    print_message('distance: min: %.3f' % min(match_distances), params=params)
-    print_message('distance: mean: %.3f' % (sum(match_distances) / len(match_distances)), params=params)
-    print_message('distance: max: %.3f' % max(match_distances), params=params)
+    left_matches = left_matches[inlier_mask.ravel()==1]
+    right_matches = right_matches[inlier_mask.ravel()==1]
+    print_message(f"There are {len(left_matches)} inliers for left, {len(right_matches)} inliers for right (FLANN matching).", params=params)
 
-    flann_good = []
-    flann_left_pts = []
-    flann_right_pts = []
+    # TODO Check return value of findFundamentalMat to see if we are forming a degenerate config
 
-    matches = matcher.radiusMatch(left_des, right_des, 0.2)
-    # TODO filter these matches for right number, turn them into epilines
-
-    # ratio test as per Lowe's paper: https://www.cs.ubc.ca/~lowe/papers/ijcv04.pdf
-    for idx_match, match_tuple in enumerate(matches):
-      m, n = match_tuple
-      if m.distance < 0.8 * n.distance:
-        flann_good.append(m)
-        flann_right_pts.append(left_kp[m.trainIdx].pt)
-        flann_left_pts.append(right_kp[m.queryIdx].pt)
-    good_printable = [(left_kp[m.trainIdx].pt, right_kp[m.queryIdx].pt) for m in flann_good]
-    print_message(f"Found {len(flann_good)} good matches between images using FLANN-based matching.", params=params, is_verbose=False)
-    print_message(f"Good matches:\n{good_printable}", params=params, is_debug=True)
-
-    flann_left_pts = np.int32(flann_left_pts)
-    flann_right_pts = np.int32(flann_right_pts)
-    flann_F, flann_mask = cv.findFundamentalMat(flann_left_pts, flann_right_pts, method=cv.FM_RANSAC, ransacReprojThreshold=1.0, confidence=0.9999)
-    print_message(f"Found Fundamental Matrix flann_F:\n{flann_F}", params=params)
-    # Select only inliers
-    flann_left_pts = flann_left_pts[flann_mask.ravel()==1]
-    flann_right_pts = flann_right_pts[flann_mask.ravel()==1]
-    print_message(f"There are {len(flann_left_pts)} inliers for left, {len(flann_right_pts)} inliers for right (FLANN matching).", params=params)
-
-    #
-    # Raw-point Fundamental Matrix
-    #
-    raw_left_pts = np.int32([kp.pt for kp in left_kp])
-    raw_right_pts = np.int32([kp.pt for kp in right_kp])
-    F, mask = cv.findFundamentalMat(raw_left_pts, raw_right_pts, method=cv.FM_RANSAC, ransacReprojThreshold=1.0, confidence=0.9999)
-    print_message(f"Found Fundamental Matrix F:\n{F}", params=params)
-    # Select only inliers
-    raw_left_pts = raw_left_pts[mask.ravel()==1]
-    raw_right_pts = raw_right_pts[mask.ravel()==1]
-    print_message(f"There are {len(raw_left_pts)} inliers for left, {len(raw_right_pts)} inliers for right (RANSAC matching w/ Raw Pts).", params=params)
-
-
-    #
-    # Manually-entered Fundamental Matrix
-    #
-    if (get_param("debug", params) is True and ((left_idx == 1 and right_idx == 2) or (left_idx == 2 and right_idx == 1))):
-      manual_left_pts = [(333,377),(339,343),(765,234),(784,269),(995,83),(248,247),(54,23),(483,470),(596,199)]
-      manual_right_pts = [(393,375),(398,340),(807,209),(823,239),(952,73),(277,49),(10,28),(560,447),(661,184)]
-      manual_left_pts = np.int32(manual_left_pts)
-      manual_right_pts = np.int32(manual_right_pts)
-      manual_F, manual_mask = cv.findFundamentalMat(manual_left_pts, manual_right_pts, method=cv.FM_RANSAC, ransacReprojThreshold=1.0, confidence=0.9999)
-      print_message(f"Found Fundamental Matrix manual_F:\n{manual_F}", params=params)
-      manual_left_pts = manual_left_pts[manual_mask.ravel()==1]
-      manual_right_pts = manual_right_pts[manual_mask.ravel()==1]
-      print_message(f"There are {len(manual_left_pts)} inliers for left, {len(manual_right_pts)} inliers for right (RANSAC matching w/ Raw Pts).", params=params)
-      do_epilines(manual_F,
-                  left_img, left_idx, manual_left_pts,
-                  right_img, right_idx, manual_right_pts,
-                  prefix='manual_epilines', p=params)
-      do_rectification(intrinsic_matrix,
-                      distortion_coeffs,
-                      refined_mtx,
-                      manual_F,
-                      (img_w_new, img_h_new),
-                      left_img, left_idx, manual_left_pts,
-                      right_img, right_idx, manual_right_pts,
-                      prefix='manual_remap', p=params)
-
-
-    # TODO Check return value of findFundamentalMat to see if we are forming a
-    # degenerate configuration
-
-    #
-    #
-    # Compute Epipolar lines using the Fundamental Matrix
-    #
-    #
-
-    rectify_input_pts_left = flann_left_pts
-    rectify_input_pts_right = flann_right_pts
-    rectify_F = flann_F
-
-    do_epilines(rectify_F,
-                left_img, left_idx, rectify_input_pts_left,
-                right_img, right_idx, rectify_input_pts_right,
-                prefix=f"epilines_pair{iterator}", p=params)
+    do_epilines(fundamental_mtx,
+                left_img, left_idx, left_matches,
+                right_img, right_idx, right_matches,
+                prefix=f"epilines_pair{pair_counter}", p=params)
 
     do_rectification(intrinsic_matrix,
                      distortion_coeffs,
                      refined_mtx,
-                     rectify_F,
+                     fundamental_mtx,
                      (img_w_new, img_h_new),
-                     left_img, left_idx, rectify_input_pts_left,
-                     right_img, right_idx, rectify_input_pts_right,
-                     prefix=f"remap_pair{iterator}", p=params)
-    iterator += 1
+                     left_img, left_idx, left_matches,
+                     right_img, right_idx, right_matches,
+                     prefix=f"remap_pair{pair_counter}", p=params)
+    pair_counter += 1
 
   raise ValueError("HIT END OF TEST IMPLEMENTATION")
   return output
