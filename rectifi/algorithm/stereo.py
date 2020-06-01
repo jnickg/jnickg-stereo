@@ -62,39 +62,64 @@ def sharpen_image(image, sharpen_thresh, p=dflt_params):
     image = cv.filter2D(image, -1, kernel)
   return image
 
+def get_matcher(kp_type='SIFT', params=dflt_params):
+  search_params = dict(checks=50)
+
+  index_params = None
+  if kp_type == 'SIFT':
+    FLANN_INDEX_KDTREE = 1 # for SIFT
+    index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=16)
+  elif kp_type == 'ORB':
+    FLANN_INDEX_LSH = 6 # for ORB
+    index_params = dict(algorithm=FLANN_INDEX_LSH, table_number=6, key_size=12, multi_probe_level=1)
+
+  # https://docs.opencv.org/2.4/doc/tutorials/features2d/feature_flann_matcher/feature_flann_matcher.html
+  return cv.FlannBasedMatcher(index_params, search_params)
+
 def do_kp_correspondence(left_kp, left_des, right_kp, right_des, kp_type='SIFT', params=dflt_params):
-    search_params = dict(checks=50)
+  matcher = get_matcher(kp_type=kp_type, params=params)
+  matches = matcher.match(left_des, right_des)
+  print_message(f"Matcher found {len(matches)} matches.", params=params)
+  match_distances = [m.distance for m in matches]
 
-    index_params = None
-    if kp_type == 'SIFT':
-      FLANN_INDEX_KDTREE = 1 # for SIFT
-      index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=16)
-    elif kp_type == 'ORB':
-      FLANN_INDEX_LSH = 6 # for ORB
-      index_params = dict(algorithm=FLANN_INDEX_LSH, table_number=6, key_size=12, multi_probe_level=1)
+  print_message('Match distance: min:  %.3f' % min(match_distances), params=params)
+  print_message('Match distance: mean: %.3f' % (sum(match_distances) / len(match_distances)), params=params)
+  print_message('Match distance: max:  %.3f' % max(match_distances), params=params)
 
-    # https://docs.opencv.org/2.4/doc/tutorials/features2d/feature_flann_matcher/feature_flann_matcher.html
-    matcher = cv.FlannBasedMatcher(index_params, search_params)
-    matches = matcher.match(left_des, right_des)
-    print_message(f"Matcher found {len(matches)} matches.", params=params)
-    match_distances = [m.distance for m in matches]
+  flann_good = []
+  flann_left_pts = []
+  flann_right_pts = []
 
-    print_message('Match distance: min:  %.3f' % min(match_distances), params=params)
-    print_message('Match distance: mean: %.3f' % (sum(match_distances) / len(match_distances)), params=params)
-    print_message('Match distance: max:  %.3f' % max(match_distances), params=params)
+  flann_good = matcher.radiusMatch(left_des, right_des, max(2 * min(match_distances), 0.02))
+  flann_good_printable = [(left_kp[m[0].queryIdx].pt, right_kp[m[0].trainIdx].pt) for m in flann_good if len(m) > 0]
+  print_message(f"Found {len(flann_good_printable)} good matches between images using FLANN-based RADIUS matching.", params=params, is_verbose=False)
+  print_message(f"Good matches:\n{flann_good_printable}", params=params, is_debug=True)
+  flann_left_pts = [left_kp[m[0].queryIdx].pt for m in flann_good if len(m) > 0]
+  flann_right_pts = [right_kp[m[0].trainIdx].pt for m in flann_good if len(m) > 0]
 
-    flann_good = []
-    flann_left_pts = []
-    flann_right_pts = []
+  return flann_left_pts, flann_right_pts
 
-    flann_good = matcher.radiusMatch(left_des, right_des, max(2 * min(match_distances), 0.02))
-    flann_good_printable = [(left_kp[m[0].queryIdx].pt, right_kp[m[0].trainIdx].pt) for m in flann_good if len(m) > 0]
-    print_message(f"Found {len(flann_good_printable)} good matches between images using FLANN-based RADIUS matching.", params=params, is_verbose=False)
-    print_message(f"Good matches:\n{flann_good_printable}", params=params, is_debug=True)
-    flann_left_pts = [left_kp[m[0].queryIdx].pt for m in flann_good if len(m) > 0]
-    flann_right_pts = [right_kp[m[0].trainIdx].pt for m in flann_good if len(m) > 0]
+def do_kp_correspondence_knn(left_kp, left_des, right_kp, right_des, kp_type='SIFT', params=dflt_params):
+  matcher = get_matcher(kp_type=kp_type, params=params)
+  matches = matcher.knnMatch(left_des, right_des, k=2)
+  print_message(f"Matcher found {len(matches)} matches.", params=params)
 
-    return flann_left_pts, flann_right_pts
+  flann_good = []
+  flann_left_pts = []
+  flann_right_pts = []
+
+  # ratio test as per Lowe's paper: https://www.cs.ubc.ca/~lowe/papers/ijcv04.pdf
+  for _, k_best_matches in enumerate(matches):
+    match1, match2 = k_best_matches
+    if match1.distance < 0.8 * match2.distance:
+      flann_good.append(match1)
+      flann_left_pts.append(left_kp[match1.queryIdx].pt)
+      flann_right_pts.append(right_kp[match1.trainIdx].pt)
+  good_printable = [(left_kp[match1.queryIdx].pt, right_kp[match1.trainIdx].pt) for m in flann_good]
+  print_message(f"Found {len(flann_good)} good matches between images using FLANN-based Ratio-test matching.", params=params, is_verbose=False)
+  print_message(f"Good matches:\n{good_printable}", params=params, is_debug=True)
+
+  return flann_left_pts, flann_right_pts
 
 def do_epilines(F, left_img, left_idx, left_pts, right_img, right_idx, right_pts, prefix='epilines', p=dflt_params):
   # Find epilines corresponding to points in right image (second image) and
@@ -334,12 +359,12 @@ def rectify(image_buffers, params=dflt_params):
     (left_img, (left_kp, left_des), left_idx), (right_img, (right_kp, right_des), right_idx)  = pair
     print_message(f"Working on images {left_idx} and {right_idx}...", params=params)
 
-    left_matches, right_matches = do_kp_correspondence(left_kp,
-                                                      left_des,
-                                                      right_kp,
-                                                      right_des,
-                                                      kp_type='SIFT',
-                                                      params=params)
+    left_matches, right_matches = do_kp_correspondence_knn(left_kp,
+                                                           left_des,
+                                                           right_kp,
+                                                           right_des,
+                                                           kp_type='SIFT',
+                                                           params=params)
 
     left_matches = np.int32(left_matches)
     right_matches = np.int32(right_matches)
