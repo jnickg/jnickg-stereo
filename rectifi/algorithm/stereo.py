@@ -79,9 +79,9 @@ def do_kp_correspondence(left_kp, left_des, right_kp, right_des, kp_type='SIFT',
     print_message(f"Matcher found {len(matches)} matches.", params=params)
     match_distances = [m.distance for m in matches]
 
-    print_message('Match distance: min: %.3f' % min(match_distances), params=params)
+    print_message('Match distance: min:  %.3f' % min(match_distances), params=params)
     print_message('Match distance: mean: %.3f' % (sum(match_distances) / len(match_distances)), params=params)
-    print_message('Match distance: max: %.3f' % max(match_distances), params=params)
+    print_message('Match distance: max:  %.3f' % max(match_distances), params=params)
 
     flann_good = []
     flann_left_pts = []
@@ -349,6 +349,14 @@ def rectify(image_buffers, params=dflt_params):
                                                          ransacReprojThreshold=1.0,
                                                          confidence=0.9999)
     print_message(f"Found Fundamental Matrix flann_F:\n{fundamental_mtx}", params=params)
+
+    # If we pass seven matches into findFundamentalMat, we may have gotten three fundamental
+    # matrices smashed into one. I guess that made sense to someone?
+    # See note here: https://docs.opencv.org/2.4/modules/calib3d/doc/camera_calibration_and_3d_reconstruction.html#findfundamentalmat
+    if len(left_matches) == 7:
+      fundamental_mtx = fundamental_mtx[0:3,0:3]
+      print_message(f"Truncated Fundamental Matrix flann_F:\n{fundamental_mtx}", params=params)
+
 
     left_matches = left_matches[inlier_mask.ravel()==1]
     right_matches = right_matches[inlier_mask.ravel()==1]
