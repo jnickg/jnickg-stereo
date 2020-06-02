@@ -5,8 +5,8 @@ django-storages
 django-workers
 gunicorn
 numpy
-git+git://github.com/skvark/opencv-python.git@4b156057ec7240bde30882990fd5183bc534e430
-git+git://github.com/opencv/opencv_contrib.git@d4e02869454998c9af5af1a5c3392cdc0c31dd22
+opencv-python
+opencv-contrib-python
 Pillow
 python-dotenv
 requests

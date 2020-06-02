@@ -345,11 +345,7 @@ def rectify(image_buffers, params=dflt_params):
   print_message("+++Extracting feature points from undistorted images...", is_verbose=False)
   # Inspired by: https://docs.opencv.org/master/da/df5/tutorial_py_sift_intro.html
   #
-  feature_finder = cv.xfeatures2d.SIFT_create(
-    nfeatures=5000,
-    contrastThreshold=0.04,
-    edgeThreshold=25,
-    sigma=1.6)
+  feature_finder = cv.ORB_create(nfeatures=6000)
   feature_results = []
   for i in undistorted:
     kp = feature_finder.detect(i, None)
@@ -385,7 +381,7 @@ def rectify(image_buffers, params=dflt_params):
       left_des,
       right_kp,
       right_des,
-      kp_type='SIFT',
+      kp_type='ORB',
       params=params)
 
     left_matches = np.int32(left_matches)
@@ -404,7 +400,6 @@ def rectify(image_buffers, params=dflt_params):
     if len(left_matches) == 7:
       fundamental_mtx = fundamental_mtx[0:3,0:3]
       print_message(f"Truncated Fundamental Matrix flann_F:\n{fundamental_mtx}", params=params)
-
 
     left_matches = left_matches[inlier_mask.ravel()==1]
     right_matches = right_matches[inlier_mask.ravel()==1]
