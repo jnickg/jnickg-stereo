@@ -18,7 +18,7 @@ def average_pels(image_buffers, params=dflt_params):
   Returns:
     A byte array representing an image file, encoded in the given format
   """
-  output = {}
+  output = []
 
   # Read all images in
   cvimgs = []
@@ -43,6 +43,8 @@ def average_pels(image_buffers, params=dflt_params):
     cvi = cvi / num_images
     #np.divide(cvi, num_images, out=cvi)
     np.add(totals, cvi, out=totals)
-  _, output["file"] = cv.imencode(params['fmt'], totals)
+  _, encoded = cv.imencode(params['fmt'], totals)
+
+  output.append((encoded, "_average.bmp"))
 
   return output

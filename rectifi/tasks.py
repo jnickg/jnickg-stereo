@@ -5,6 +5,7 @@ from workers import task
 from time import sleep
 from .models import Image, RectifyRequest, RectifyRequestImage, RectifyRequestResult
 from .algorithm.average_pels import average_pels
+from .algorithm.stereo import rectify
 import numpy as np
 
 @task()
@@ -33,16 +34,27 @@ def go_and_rectify(request_id):
 
   try:
     image_files = [np.fromfile(default_storage.open(i.img.data.name), dtype=np.uint8) for i in images]
-    avg_output = average_pels(image_files, fmt=dest_fmt)
-    avg_output_f = ContentFile(avg_output, name=dest)
+    parameters = {
+      "fmg":".bmp",
+      "debug": False,
+      "do_resize": True,
+      "max_wide_len": 1000
+    }
+    outputs = rectify(image_files, params=parameters)
 
-    rslt_image = Image(name=avg_output_f.name, data=avg_output_f)
-    result = RectifyRequestResult(request=req, img=rslt_image, notes="The average of interpolated pixels")
+    db_objects = []
+    for data, filename in outputs:
+      data_file = ContentFile(data, name=filename)
+      rslt_image = Image(name=data_file.name, data=data_file)
+      db_objects.append(rslt_image)
+      result = RectifyRequestResult(request=req, img=rslt_image, notes=filename)
+      db_objects.append(result)
+
     req.status = RectifyRequest.RequestStatus.COMPLETE
 
     with transaction.atomic():
-      rslt_image.save()
-      result.save()
+      for obj in db_objects:
+        obj.save()
       req.save()
   except ValueError as e:
    req.status = RectifyRequest.RequestStatus.ABORTED

@@ -12,17 +12,17 @@
   <h2>What is Rectifi?</h2>
 </div>
 <div class="row">
-  <p>Rectifi is a simple tool to let you upload images taken with your smartphone, and get some cool data back.</p>
-  <p><strong>Note:</strong> Currently, <em>Rectifi</em> doesn't do a whole lot. The plumbing is in place, but the algorithm is some random OpenCV code that isn't very exciting. Eventually, it will let you get 3D point clouds from a few imags taken with your mobile device.</p>
-  <p>When that's supported, all you have to do is:</p>
+  <p>Rectifi is a simple tool to let you upload images of an object, taken with your smartphone, and get 3D-printable STL file back of that object.</p>
+  <p><strong>Note:</strong> Currently, <em>Rectifi</em> is a work in progress. At this time the algorithm runs through stereoscopic rectification, a critical preprocessing step before block matching. When completed, <em>Rectifi</em> will let you get 3D point clouds from a few imags taken with your mobile device.</p>
+  <p>This is all you do:</p>
   <ol>
-    <li>Pick a subject that you want to make a point cloud for.</li>
-    <li>Print out <a href="{% static "chessboard_6x9.png" %}">this</a> calibration image on a piece of paper, and fasten it to a flat surface such as a clipboard.</li>
-    <li>Take a few imags from different angles, ensuring the calibration image is clearly visible in each of them.</li>
-    <li>Upload them using the form, and hit the <button class="button-primary">Rectify!</button> button.</button></li>
-    <li>Wait a couple minutes for the algorithm to run.</li>
+    <li>Print out a <a href="{% static "chessboard_6x9.png" %}">calibration pattern</a> on a piece of paper, and fasten it to a flat surface such as a clipboard.</li>
+    <li>Take a few images of the flat calibration pattern from various angles. 10 or more is better.</li>
+    <li>Pick a subject for which you want to make a stereolithography (STL) file, and take a bunch of pictures from many angles.</li>
+    <li>Upload them in one batch using the form, and hit the <button class="button-primary">Rectify!</button> button.</button></li>
+    <li>Wait a while for the algorithm to run.</li>
   </ol>
-  <p>...And then bam! Your results page will be populated with all the output data, for your enjoyment.</p>
+  <p>...When the algorithm is complete, your request page will contain all the output data from the algorithm's run, including the steps along the way!</p>
 </div>
 <div class="row">
   <h2>What is "<em>Calibration</em>?"</h2>
@@ -39,16 +39,45 @@
   </div>
 </div>
 <div class="row">
+  <h2>What is "<em>Feature Correspondence</em>?"</h2>
+</div>
+<div class="row">
+  <div class="five columns">
+    <label for="rectified"><em>{{ r.notes }}</em></label>
+    <img class="u-full-width" id="rectified" src="{% static "correspondence.png" %}" alt="SIFT features extracted from pictures of a toy statue" />
+    <div class="caption">SIFT features in two images. FLANN is used to any given circle in the left image, with the matching one in the right image.</div>
+  </div>
+  <div class="seven columns">
+    <p>After extracting a bunch of scale-invariant features from each image, using an algorithm called <a href="https://www.cs.ubc.ca/~lowe/papers/ijcv04.pdf" target="_blank">SIFT</a>, we need to find which features from image A matches up with in image B. This is called <em>correspondence,</em> and it's a tough problem to fully solve. This is because if you photograph an object from different angles, the pixels representing an object don't always look the same.</p>
+    <p>To correspond features we use a matching library called <a href="https://github.com/mariusmuja/flann" target="_blank">FLANN</a>, to turn the problem into a <em>k</em>-d tree search of SIFT features.. This gives relatively high confidence that our correspondences don't have any bad apples, which could screw up rectification.</p>
+  </div>
+</div>
+<div class="row">
   <h2>What is "<em>Rectification</em>?"</h2>
 </div>
 <div class="row">
+  <div class="seven columns">
+    <p><em>Stereoscopic rectification</em> is an extremely math-heavy geometric process to take two iamges of the same thing, taken from different angles, and stretching them so that horizontal lines correpond to the same physical space in the picture. Doing this makes it a lot easier to calculate how far away the objects in the picture are, because we can scan one line at a time and triangulate the differences we see.</p>
+    <p>After corresponding features, we use an algorithm called <a href="https://dl.acm.org/doi/10.1145/358669.358692" target="_blank">Random Sample Consensus</a> ("RANSAC") to estimate the <em>fundamental matrix.</em> That matrix tells us not only the geometric relationship between camera positions in any image pair, but includes intrinsic information about the cameras themselves so it can operate on the pixels themselves. Once we have that, we can rectify the images as shown to the right.</p>
+  </div>
   <div class="five columns">
     <label for="rectified"><em>{{ r.notes }}</em></label>
     <img class="u-full-width" id="rectified" src="{% static "rectified_epipolar.png" %}" alt="Image showing rectified epipolar geometry" />
     <div class="caption">Rectified epipolar geometry. Notice that the horizontal lines in both images touch the same physical objects.</div>
   </div>
+</div>
+<div class="row">
+  <h2>What is "<em>Stereo Correspondence</em>?"</h2>
+</div>
+<div class="row">
+  <div class="five columns">
+    <label for="rectified"><em>{{ r.notes }}</em></label>
+    <img class="u-full-width" id="rectified" src="{% static "block_matching.png" %}" alt="Stock example of block matching output" />
+    <div class="caption">Depth map output from block matching the top two images. Lighter / hotter means closer.</div>
+  </div>
   <div class="seven columns">
-    <p><em>Stereoscopic rectification</em> is an extremely math-heavy geometric process to take two iamges of the same thing, taken from different angles, and stretching them so that horizontal lines correpond to the same physical space in the picture. Doing this makes it a lot easier to calculate how far away the objects in the picture are, because we can scan one line at a time and triangulate the differences we see.</p>
+    <p>When you have two rectified images of the same object, it is possible to match three-dimensional points represented by those two images, using a technique called <em>Block Matching</em>. This triangulates disaprity measures between the two images, using the corresponding points in any pair of photographs.</p>
+    <p><em>Rectifi</em> doesn't yet support stereo correspondence, so all you get from submitting a request is up through rectification (hence the name!) — once completed though, stereo correspondence will be performed using all the views given, and you'll get an STL file for 3D printing.</p>
   </div>
 </div>
 {% endblock %}

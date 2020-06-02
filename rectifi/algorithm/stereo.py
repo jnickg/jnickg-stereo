@@ -33,6 +33,9 @@ def print_message(message, is_verbose=True, is_debug=False, params=dflt_params, 
     sys.stdout.flush()
 
 def cv_save(filename, data, params=dflt_params):
+  if get_param("debug", params) is False:
+    print_message("Skipping file save -- not in Debug Mode!", is_verbose=False)
+    return
   save_to = path.join(get_param("save_path", params), filename)
   print_message(f"Writing to file {save_to}...", params=params)
   cv.imwrite(save_to, data)
@@ -133,11 +136,15 @@ def do_epilines(F, left_img, left_idx, left_pts, right_img, right_idx, right_pts
   lines2 = lines2.reshape(-1,3)
   print_message(f"Computed Epilines lines2:\n{lines2}", params=p)
 
+  epiline_images = []
+  left_lines, _  = cv_drawlines(left_img,right_img,lines1,left_pts,right_pts)
+  epiline_images.append((left_lines, f"{prefix}_{left_idx}-{right_idx}.bmp"))
+  right_lines, _ = cv_drawlines(right_img,left_img,lines2,right_pts,left_pts)
+  epiline_images.append((right_lines, f"{prefix}_{right_idx}-{left_idx}.bmp"))
   if (get_param("verbose", p)):
-    left_lines, _  = cv_drawlines(left_img,right_img,lines1,left_pts,right_pts)
-    right_lines, _ = cv_drawlines(right_img,left_img,lines2,right_pts,left_pts)
-    cv_save(f"{prefix}_{left_idx}-{right_idx}.bmp", left_lines, params=p)
-    cv_save(f"{prefix}_{right_idx}-{left_idx}.bmp", right_lines, params=p)
+    for img, filename in epiline_images:
+      cv_save(filename, img, params=p)
+  return epiline_images
 
 def do_rectification(intrinsic_matrix,
                      distortion_coeffs,
@@ -147,44 +154,51 @@ def do_rectification(intrinsic_matrix,
                      left_img, left_idx, left_pts,
                      right_img, right_idx, right_pts,
                      prefix="remap", p=dflt_params):
-    img_w, img_h = size
-    # No threshold because we selected only inliers, above
-    cal_success, H1, H2 = cv.stereoRectifyUncalibrated(left_pts,
-                                                       right_pts,
-                                                       rectify_F,
-                                                       (img_w, img_h),
-                                                       threshold=3.0)
-    if cal_success is not True:
-      raise ValueError("Failed to rectify images.")
-    print_message(f"Calculated Homography Matrices:\nH1: {H1}\nH2: {H2}", params=p)
+  img_w, img_h = size
+  # No threshold because we selected only inliers, above
+  cal_success, H1, H2 = cv.stereoRectifyUncalibrated(
+    left_pts,
+    right_pts,
+    rectify_F,
+    (img_w, img_h),
+    threshold=3.0)
+  if cal_success is not True:
+    raise ValueError("Failed to rectify images.")
+  print_message(f"Calculated Homography Matrices:\nH1: {H1}\nH2: {H2}", params=p)
 
-    # See last comment in https://docs.opencv.org/2.4/modules/imgproc/doc/geometric_transformations.html#initundistortrectifymap
-    # Also slide 25: http://ece631web.groups.et.byu.net/Lectures/ECEn631%2014%20-%20Calibration%20and%20Rectification.pdf
-    R1 = np.linalg.inv(intrinsic_matrix).dot(H1).dot(intrinsic_matrix)
-    R2 = np.linalg.inv(intrinsic_matrix).dot(H2).dot(intrinsic_matrix)
-    print_message(f"R Matrices for undistort mappings\nR1: {R1}\nR2: {R2}")
+  # See last comment in https://docs.opencv.org/2.4/modules/imgproc/doc/geometric_transformations.html#initundistortrectifymap
+  # Also slide 25: http://ece631web.groups.et.byu.net/Lectures/ECEn631%2014%20-%20Calibration%20and%20Rectification.pdf
+  R1 = np.linalg.inv(intrinsic_matrix).dot(H1).dot(intrinsic_matrix)
+  R2 = np.linalg.inv(intrinsic_matrix).dot(H2).dot(intrinsic_matrix)
+  print_message(f"R Matrices for undistort mappings\nR1: {R1}\nR2: {R2}")
 
-    map1_1, map1_2 = cv.initUndistortRectifyMap(intrinsic_matrix,
-                                                distortion_coeffs,
-                                                R1,
-                                                refined_mtx,
-                                                (img_w, img_h),
-                                                cv.CV_32FC1)
-    map2_1, map2_2 = cv.initUndistortRectifyMap(intrinsic_matrix,
-                                                distortion_coeffs,
-                                                R2,
-                                                refined_mtx,
-                                                (img_w, img_h),
-                                                cv.CV_32FC1)
+  map1_1, map1_2 = cv.initUndistortRectifyMap(
+    intrinsic_matrix,
+    distortion_coeffs,
+    R1,
+    refined_mtx,
+    (img_w, img_h),
+    cv.CV_32FC1)
+  map2_1, map2_2 = cv.initUndistortRectifyMap(
+    intrinsic_matrix,
+    distortion_coeffs,
+    R2,
+    refined_mtx,
+    (img_w, img_h),
+    cv.CV_32FC1)
 
-    print_message(f"Rectify maps:\nmap1_1: {map1_1}\nmat1_2: {map1_2} ", params=p)
-    print_message(f"Rectify maps:\nmap2_1: {map2_1}\nmat2_2: {map2_2} ", params=p)
+  print_message(f"Rectify maps:\nmap1_1: {map1_1}\nmat1_2: {map1_2} ", params=p)
+  print_message(f"Rectify maps:\nmap2_1: {map2_1}\nmat2_2: {map2_2} ", params=p)
 
-    if (get_param("verbose", p)):
-      left_remap = cv.remap(left_img, map1_1, map1_2, cv.INTER_LANCZOS4)
-      right_remap = cv.remap(right_img, map2_1, map2_2, cv.INTER_LANCZOS4)
-      cv_save(f"{prefix}_{left_idx}-{right_idx}.bmp", left_remap, params=p)
-      cv_save(f"{prefix}_{right_idx}-{left_idx}.bmp", right_remap, params=p)
+  rectified_images = []
+  left_remap = cv.remap(left_img, map1_1, map1_2, cv.INTER_LANCZOS4)
+  rectified_images.append((left_remap, f"{prefix}_{left_idx}-{right_idx}.bmp"))
+  right_remap = cv.remap(right_img, map2_1, map2_2, cv.INTER_LANCZOS4)
+  rectified_images.append((right_remap, f"{prefix}_{right_idx}-{left_idx}.bmp"))
+  if (get_param("verbose", p)):
+    for img, filename in rectified_images:
+      cv_save(filename, img, params=p)
+  return rectified_images
 
 def rectify(image_buffers, params=dflt_params):
   """Rectifies the given images
@@ -196,7 +210,7 @@ def rectify(image_buffers, params=dflt_params):
   Returns:
     TBD
   """
-  output = {}
+  output = []
   chessboard_size = get_param("chess_sz", params)
 
   #
@@ -285,28 +299,31 @@ def rectify(image_buffers, params=dflt_params):
     pt_refined = cv.cornerSubPix(i, pt, (11, 11), (-1, -1), get_param("criteria", params))
     imgpoints.append(pt_refined)
 
-  calibrate_output = cv.calibrateCamera(objpoints,
-                                        imgpoints,
-                                        i.shape[::-1],
-                                        None,
-                                        None,
-                                        rvecs=None,
-                                        tvecs=None,
-                                        flags=(cv.CALIB_ZERO_TANGENT_DIST | cv.CALIB_FIX_PRINCIPAL_POINT))
+  calibrate_output = cv.calibrateCamera(
+    objpoints,
+    imgpoints,
+    i.shape[::-1],
+    None,
+    None,
+    rvecs=None,
+    tvecs=None,
+    flags=(cv.CALIB_ZERO_TANGENT_DIST | cv.CALIB_FIX_PRINCIPAL_POINT))
   calib_error_rms, intrinsic_matrix, distortion_coeffs, rotation_vecs, translation_vecs = calibrate_output
-  print_message(f"Successfully calibrated!\n"
-                f"rms: {calib_error_rms}\n"
-                f"mtx:\n{intrinsic_matrix}\n"
-                f"dist:\n{distortion_coeffs}\n"
-                f"rvecs:\n{rotation_vecs}\n"
-                f"tvecs:\n{translation_vecs}",
-                is_verbose=True, params=params)
+  print_message(
+    f"Successfully calibrated!\n"
+    f"rms: {calib_error_rms}\n"
+    f"mtx:\n{intrinsic_matrix}\n"
+    f"dist:\n{distortion_coeffs}\n"
+    f"rvecs:\n{rotation_vecs}\n"
+    f"tvecs:\n{translation_vecs}",
+    is_verbose=True, params=params)
   # Taken from: https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_calib3d/py_calibration/py_calibration.html
-  refined_mtx, roi = cv.getOptimalNewCameraMatrix(intrinsic_matrix,
-                                                  distortion_coeffs,
-                                                  (img_w, img_h),
-                                                  0,
-                                                  newImgSize=(img_w, img_h))
+  refined_mtx, roi = cv.getOptimalNewCameraMatrix(
+    intrinsic_matrix,
+    distortion_coeffs,
+    (img_w, img_h),
+    0,
+    newImgSize=(img_w, img_h))
   img_orig_x_new, img_orig_y_new, img_w_new, img_h_new = roi
   print_message(f"Calculated refined camera matrix and ROI.\nMTX: {refined_mtx},\nROI: {roi}", is_verbose=True, params=params)
   
@@ -328,24 +345,27 @@ def rectify(image_buffers, params=dflt_params):
   print_message("+++Extracting feature points from undistorted images...", is_verbose=False)
   # Inspired by: https://docs.opencv.org/master/da/df5/tutorial_py_sift_intro.html
   #
-  feature_finder = cv.xfeatures2d.SIFT_create(nfeatures=5000,
-                                              contrastThreshold=0.04,
-                                              edgeThreshold=25,
-                                              sigma=1.6)
+  feature_finder = cv.xfeatures2d.SIFT_create(
+    nfeatures=5000,
+    contrastThreshold=0.04,
+    edgeThreshold=25,
+    sigma=1.6)
   feature_results = []
   for i in undistorted:
     kp = feature_finder.detect(i, None)
     kp, des = feature_finder.compute(i, kp)
     feature_results.append((kp, des))
 
-  if (get_param("verbose", params)):
-    idx_feature = 0
-    for i, kp, des in zip(undistorted, [kp for kp, _ in feature_results], [des for _, des in feature_results]):
-      print_message(f"Found {len(kp)} keypoints in image {idx_feature}.", params=params)
-      print_message(f"Computed {len(des)} descriptors in image {idx_feature}:\n{des}", params=params)
-      kp_img = cv.drawKeypoints(i, kp, None, color=(0,102,255), flags=cv.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-      cv_save(f"keypoints_{idx_feature}.bmp", kp_img, params=params)
-      idx_feature += 1
+  idx_feature = 0
+  for i, kp, des in zip(undistorted, [kp for kp, _ in feature_results], [des for _, des in feature_results]):
+    print_message(f"Found {len(kp)} keypoints in image {idx_feature}.", params=params)
+    print_message(f"Computed {len(des)} descriptors in image {idx_feature}:\n{des}", params=params)
+    kp_img = cv.drawKeypoints(i, kp, None, color=(0,102,255), flags=cv.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+    kp_img_filename = f"keypoints_{idx_feature}.bmp"
+    output.append((kp_img, kp_img_filename))
+    if (get_param("verbose", params)):
+      cv_save(kp_img_filename, kp_img, params=params)
+    idx_feature += 1
 
   #
   # For every pair of images & points, calculate the fundamental matrix (homographies)
@@ -355,24 +375,27 @@ def rectify(image_buffers, params=dflt_params):
   # https://docs.opencv.org/2.4/modules/calib3d/doc/camera_calibration_and_3d_reconstruction.html#stereorectifyuncalibrated
   #
   pair_counter = 0
+
   for pair in itt.combinations(zip(undistorted, feature_results, [i for i, n in enumerate(undistorted)]), 2):
     (left_img, (left_kp, left_des), left_idx), (right_img, (right_kp, right_des), right_idx)  = pair
     print_message(f"Working on images {left_idx} and {right_idx}...", params=params)
 
-    left_matches, right_matches = do_kp_correspondence_knn(left_kp,
-                                                           left_des,
-                                                           right_kp,
-                                                           right_des,
-                                                           kp_type='SIFT',
-                                                           params=params)
+    left_matches, right_matches = do_kp_correspondence_knn(
+      left_kp,
+      left_des,
+      right_kp,
+      right_des,
+      kp_type='SIFT',
+      params=params)
 
     left_matches = np.int32(left_matches)
     right_matches = np.int32(right_matches)
-    fundamental_mtx, inlier_mask = cv.findFundamentalMat(left_matches,
-                                                         right_matches,
-                                                         method=cv.FM_RANSAC,
-                                                         ransacReprojThreshold=1.0,
-                                                         confidence=0.9999)
+    fundamental_mtx, inlier_mask = cv.findFundamentalMat(
+      left_matches,
+      right_matches,
+      method=cv.FM_RANSAC,
+      ransacReprojThreshold=1.0,
+      confidence=0.9999)
     print_message(f"Found Fundamental Matrix flann_F:\n{fundamental_mtx}", params=params)
 
     # If we pass seven matches into findFundamentalMat, we may have gotten three fundamental
@@ -389,20 +412,28 @@ def rectify(image_buffers, params=dflt_params):
 
     # TODO Check return value of findFundamentalMat to see if we are forming a degenerate config
 
-    do_epilines(fundamental_mtx,
-                left_img, left_idx, left_matches,
-                right_img, right_idx, right_matches,
-                prefix=f"epilines_pair{pair_counter}", p=params)
+    epilines = do_epilines(
+      fundamental_mtx,
+      left_img, left_idx, left_matches,
+      right_img, right_idx, right_matches,
+      prefix=f"epilines_pair{pair_counter}", p=params)
+    
+    for tup in epilines:
+      output.append(tup)
 
-    do_rectification(intrinsic_matrix,
-                     distortion_coeffs,
-                     refined_mtx,
-                     fundamental_mtx,
-                     (img_w_new, img_h_new),
-                     left_img, left_idx, left_matches,
-                     right_img, right_idx, right_matches,
-                     prefix=f"remap_pair{pair_counter}", p=params)
+    remaps = do_rectification(
+      intrinsic_matrix,
+      distortion_coeffs,
+      refined_mtx,
+      fundamental_mtx,
+      (img_w_new, img_h_new),
+      left_img, left_idx, left_matches,
+      right_img, right_idx, right_matches,
+      prefix=f"remap_pair{pair_counter}", p=params)
+
+    for tup in remaps:
+      output.append(tup)
+
     pair_counter += 1
 
-  raise ValueError("HIT END OF TEST IMPLEMENTATION")
   return output
