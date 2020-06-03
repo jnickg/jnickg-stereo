@@ -41,7 +41,7 @@ def cv_save(filename, data, params=dflt_params):
   cv.imwrite(save_to, data)
 
 def cv_bmpencode(data, filename, params=dflt_params):
-  _, encoded = cv.imencode(params['fmt'], data)
+  _, encoded = cv.imencode(get_param("fmt", params), data)
   return encoded, filename
 
 # Taken from https://docs.opencv.org/master/da/de9/tutorial_py_epipolar_geometry.html
