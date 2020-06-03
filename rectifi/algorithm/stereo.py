@@ -40,6 +40,10 @@ def cv_save(filename, data, params=dflt_params):
   print_message(f"Writing to file {save_to}...", params=params)
   cv.imwrite(save_to, data)
 
+def cv_bmpencode(data, filename, params=dflt_params):
+  _, encoded = cv.imencode(params['fmt'], data)
+  return encoded, filename
+
 # Taken from https://docs.opencv.org/master/da/de9/tutorial_py_epipolar_geometry.html
 def cv_drawlines(img1,img2,lines,pts1,pts2):
     ''' img1 - image on which we draw the epilines for the points in img2
@@ -428,6 +432,9 @@ def rectify(image_buffers, params=dflt_params):
 
     for tup in remaps:
       output.append(tup)
+
+    # Encode to Bitmap, from raw OpenCV data
+    output = [cv_bmpencode(data, filename, params) for data, filename in output]
 
     pair_counter += 1
 
