@@ -1,8 +1,10 @@
 {
-  "name": "Start on Heroku: Python",
-  "description": "A barebones Python app, which can easily be deployed to Heroku.",
+  "name": "Rectifi! A Stereoscopic image rectifier.",
+  "description": "A web API and browser frontent to perform stereoscopic operations on user-provided images",
   "image": "heroku/python",
-  "repository": "https://github.com/heroku/python-getting-started",
+  "repository": "https://github.com/jnickg/jnickg-stereo",
+  "website": "http://rectifi.jnickg.net",
+  "success_url":"/rectifi",
   "keywords": ["python", "django" ],
   "addons": [ "heroku-postgresql" ],
   "env": {
