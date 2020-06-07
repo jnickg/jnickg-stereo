@@ -44,6 +44,7 @@ def go_and_rectify(request_id):
 
     db_objects = []
     for filename in outputs:
+      print(f"Handling rectification output: {filename}...")
       local_output_file = open(filename, "rb")
       data_file = ContentFile(local_output_file.read(), name=filename)
       local_output_file.close()

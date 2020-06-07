@@ -359,9 +359,7 @@ def rectify(image_buffers, params=dflt_params):
     print_message(f"Computed {len(des)} descriptors in image {idx_feature}:\n{des}", params=params)
     kp_img = cv.drawKeypoints(i, kp, None, color=(0,102,255), flags=cv.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
     kp_img_filename = f"keypoints_{idx_feature}.bmp"
-    output.append((kp_img, kp_img_filename))
-    if (get_param("verbose", params)):
-      output.append(cv_save(kp_img_filename, kp_img, params=params))
+    output.append(cv_save(kp_img_filename, kp_img, params=params))
     idx_feature += 1
 
   #

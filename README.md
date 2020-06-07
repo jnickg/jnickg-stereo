@@ -1,6 +1,8 @@
 # Overview
 This repositroy defines the `stereo` project, and the `rectifi` app. It is the home of `jnickg`'s experiments and investigations into stereoscopy.
 
+The live project can be found at [`rectifi.jnickg.net`](http://rectifi.jnickg.net)
+
 # Algorithms
 Algorithm code lives in `./rectifi/algorithm`. The primary algorithm for stereo rectification is [`stereo.py`](./rectifi/algorithm/stereo.py)
 # Run Locally
