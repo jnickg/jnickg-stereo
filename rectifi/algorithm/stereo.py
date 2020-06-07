@@ -33,12 +33,10 @@ def print_message(message, is_verbose=True, is_debug=False, params=dflt_params, 
     sys.stdout.flush()
 
 def cv_save(filename, data, params=dflt_params):
-  if get_param("debug", params) is False:
-    print_message("Skipping file save -- not in Debug Mode!", is_verbose=False)
-    return
   save_to = path.join(get_param("save_path", params), filename)
   print_message(f"Writing to file {save_to}...", params=params)
   cv.imwrite(save_to, data)
+  return save_to
 
 def cv_bmpencode(data, filename, params=dflt_params):
   _, encoded = cv.imencode(get_param("fmt", params), data)
@@ -145,10 +143,10 @@ def do_epilines(F, left_img, left_idx, left_pts, right_img, right_idx, right_pts
   epiline_images.append((left_lines, f"{prefix}_{left_idx}-{right_idx}.bmp"))
   right_lines, _ = cv_drawlines(right_img,left_img,lines2,right_pts,left_pts)
   epiline_images.append((right_lines, f"{prefix}_{right_idx}-{left_idx}.bmp"))
-  if (get_param("verbose", p)):
-    for img, filename in epiline_images:
-      cv_save(filename, img, params=p)
-  return epiline_images
+
+  output = [cv_save(f, i, params=p) for i, f in epiline_images]
+
+  return output
 
 def do_rectification(intrinsic_matrix,
                      distortion_coeffs,
@@ -199,10 +197,9 @@ def do_rectification(intrinsic_matrix,
   rectified_images.append((left_remap, f"{prefix}_{left_idx}-{right_idx}.bmp"))
   right_remap = cv.remap(right_img, map2_1, map2_2, cv.INTER_LANCZOS4)
   rectified_images.append((right_remap, f"{prefix}_{right_idx}-{left_idx}.bmp"))
-  if (get_param("verbose", p)):
-    for img, filename in rectified_images:
-      cv_save(filename, img, params=p)
-  return rectified_images
+
+  output = [cv_save(f, i, params=p) for i, f in rectified_images]
+  return output
 
 def rectify(image_buffers, params=dflt_params):
   """Rectifies the given images
@@ -282,7 +279,7 @@ def rectify(image_buffers, params=dflt_params):
       print_message(f"Found points for image {idx_chess}:\n{f[1]}", is_verbose=True, params=params)
       drawable = img.copy()
       cv.drawChessboardCorners(drawable, chessboard_size, f[1], f[0])
-      cv_save(f"chessboard_{idx_chess}.bmp", drawable, params=params)
+      output.append(cv_save(f"chessboard_{idx_chess}.bmp", drawable, params=params))
       idx_chess += 1
 
   #
@@ -342,7 +339,7 @@ def rectify(image_buffers, params=dflt_params):
     undist = undist[y:y+h, x:x+w]
     undistorted.append(undist)
     if (get_param("verbose", params)):
-      cv_save(f"undistorted_{idx_undistort}.bmp", undist, params=params)
+      output.append(cv_save(f"undistorted_{idx_undistort}.bmp", undist, params=params))
     idx_undistort += 1
 
   #
@@ -364,7 +361,7 @@ def rectify(image_buffers, params=dflt_params):
     kp_img_filename = f"keypoints_{idx_feature}.bmp"
     output.append((kp_img, kp_img_filename))
     if (get_param("verbose", params)):
-      cv_save(kp_img_filename, kp_img, params=params)
+      output.append(cv_save(kp_img_filename, kp_img, params=params))
     idx_feature += 1
 
   #
@@ -417,8 +414,9 @@ def rectify(image_buffers, params=dflt_params):
       right_img, right_idx, right_matches,
       prefix=f"epilines_pair{pair_counter}", p=params)
     
-    for tup in epilines:
-      output.append(tup)
+
+    for epifile in epilines:
+      output.append(epifile)
 
     remaps = do_rectification(
       intrinsic_matrix,
@@ -430,11 +428,8 @@ def rectify(image_buffers, params=dflt_params):
       right_img, right_idx, right_matches,
       prefix=f"remap_pair{pair_counter}", p=params)
 
-    for tup in remaps:
-      output.append(tup)
-
-    # Encode to Bitmap, from raw OpenCV data
-    output = [cv_bmpencode(data, filename, params) for data, filename in output]
+    for remapfile in remaps:
+      output.append(remapfile)
 
     pair_counter += 1
 

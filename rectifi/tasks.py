@@ -43,8 +43,10 @@ def go_and_rectify(request_id):
     outputs = rectify(image_files, params=parameters)
 
     db_objects = []
-    for data, filename in outputs:
-      data_file = ContentFile(data, name=filename)
+    for filename in outputs:
+      local_output_file = open(filename, "rb")
+      data_file = ContentFile(local_output_file.read(), name=filename)
+      local_output_file.close()
       rslt_image = Image(name=data_file.name, data=data_file)
       db_objects.append(rslt_image)
       result = RectifyRequestResult(request=req, img=rslt_image, notes=filename)

@@ -8,7 +8,9 @@ import numpy as np
 import hashlib as hl
 import cv2 as cv
 import filecmp
+import tempfile
 
+CONFIG_OUTPUT_DUMP_DIR = tempfile.gettempdir()
 test_fmt = '.bmp'
 expected_output = "expected"
 actual_output = "actual"
@@ -114,8 +116,9 @@ class TestStereo(unittest.TestCase):
       print('\t' + f)
 
   def tearDown(self):
+    global CONFIG_OUTPUT_DUMP_DIR
     current_files = [join(self.test_path, f) for f in listdir(self.test_path) if isfile(join(self.test_path, f))]
-    dump_dir = "c:/temp/stereo/"
+    dump_dir = CONFIG_OUTPUT_DUMP_DIR
     if not os.path.isdir(dump_dir):
       os.makedirs(dump_dir)
     print(f"Moving test artifacts to: {dump_dir} ...")
@@ -130,10 +133,11 @@ class TestStereo(unittest.TestCase):
       os.remove(self.output_file)
     except:
       pass
+    print(f"MOVED TEST ARTIFACTS TO: {dump_dir}.")
 
   def test_rectify(self):
     outputs = run_test_on(stereo.rectify, self.image_files, self.output_file, save_path=self.test_path)
-    for imgdata, file_name in outputs:
+    for file_name in outputs:
       #self.assertTrue(isfile(file_name), f"Could not find {file_name}")
       pass
 
