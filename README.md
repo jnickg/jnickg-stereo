@@ -13,7 +13,8 @@ Algorithm code lives in `./rectifi/algorithm`. The primary algorithm for stereo 
 ## Setup
 1. `git clone git@github.com:jnickg/jnickg-stereo.git` (or download ZIP file)
 2. `cd jnickg-stereo`
-3. `pip install -r requirements.txt`
+3. `pip install -r requirements.txt` _← install necessary Python packages_
+4. `python manage.py collectstatic --noinput` _← collect static files to be served by local web instance_
 ## Running Web Instance Locally
 **Note:** In general, see [`Procfile`](./Procfile) (linux) and [`Procfile.windows`](./Procfile.windows) (windows) for commands to run either the web instance, or the worker instance. Below shows only how to run the web instance.
 
